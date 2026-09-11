@@ -1,0 +1,17 @@
+{
+  "rules": {
+    "room": {
+      ".read": true,
+      "presence": {
+        "A": { ".write": true },
+        "B": { ".write": true }
+      },
+      "session": { ".write": true },
+      "strokes": { ".write": true },
+      "live": {
+        "A": { ".write": true },
+        "B": { ".write": true }
+      }
+    }
+  }
+}

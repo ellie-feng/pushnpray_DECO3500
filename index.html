@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Push'n'Pray</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#fbf3e6">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <div class="rotate-hint">
+    <div class="rotate-icon">↻</div>
+    <p>Turn your iPad sideways to play</p>
+  </div>
+
+  <main id="app">
+
+    <!-- JOIN (claiming a role) -->
+    <section id="screen-join" class="screen" data-screen="join">
+      <div class="center-card">
+        <h1 class="logo">🖊️ Push'n'Pray</h1>
+        <p class="muted">Connecting&hellip;</p>
+      </div>
+    </section>
+
+    <!-- ONBOARDING -->
+    <section id="screen-onboarding" class="screen" data-screen="onboarding" hidden>
+      <div class="card-stack" id="onboarding-cards"></div>
+      <div class="onboarding-nav">
+        <div class="dots" id="onboarding-dots"></div>
+        <button id="onboarding-next" class="btn btn-primary">Next</button>
+      </div>
+    </section>
+
+    <!-- LOBBY / READY -->
+    <section id="screen-lobby" class="screen" data-screen="lobby" hidden>
+      <div class="lobby-wrap">
+        <div class="presence-row">
+          <div class="presence-pill gone" id="pill-you"><span class="dot"></span>You</div>
+          <div class="presence-pill gone" id="pill-partner"><span class="dot"></span>Partner</div>
+        </div>
+        <button id="ready-btn" class="ready-btn">
+          <svg class="ready-ring" viewBox="0 0 120 120">
+            <circle class="ring-track" cx="60" cy="60" r="54"></circle>
+            <circle class="ring-fill" id="ready-ring-fill" cx="60" cy="60" r="54"></circle>
+          </svg>
+          <span class="ready-label" id="ready-label">Hold to<br>ready up</span>
+        </button>
+        <p class="muted">The game starts once you're both ready</p>
+      </div>
+    </section>
+
+    <!-- COUNTDOWN -->
+    <section id="screen-countdown" class="screen" data-screen="countdown" hidden>
+      <div class="countdown-number" id="countdown-number">3</div>
+    </section>
+
+    <!-- PLAY -->
+    <section id="screen-play" class="screen" data-screen="play" hidden>
+      <div class="hud">
+        <div class="hud-word">
+          <span class="hud-word-emoji" id="hud-emoji"></span>
+          <span id="hud-word-text"></span>
+        </div>
+        <div class="hud-center">
+          <div class="hud-total" id="hud-total">2:00</div>
+          <div class="hud-turn" id="hud-turn"></div>
+        </div>
+        <div class="hud-presence">
+          <span class="dot" id="hud-dot-a"></span>
+          <span class="dot" id="hud-dot-b"></span>
+        </div>
+      </div>
+
+      <div class="play-body">
+        <div class="toolbar" id="toolbar">
+          <button class="tool-btn active" data-tool="pen" title="Pen">✏️</button>
+          <button class="tool-btn" data-tool="highlighter" title="Highlighter">🖍️</button>
+          <button class="tool-btn" data-tool="eraser" title="Eraser">🧼</button>
+          <div class="toolbar-sep"></div>
+          <div class="swatches" id="swatches"></div>
+          <div class="toolbar-sep"></div>
+          <div class="sizes" id="sizes">
+            <button class="size-btn" data-size="s">S</button>
+            <button class="size-btn active" data-size="m">M</button>
+            <button class="size-btn" data-size="l">L</button>
+          </div>
+          <div class="toolbar-sep"></div>
+          <button class="tool-btn" id="undo-btn" title="Undo">↩️</button>
+        </div>
+
+        <div class="canvas-wrap">
+          <canvas id="canvas-base"></canvas>
+          <canvas id="canvas-live"></canvas>
+          <div class="turn-banner" id="turn-banner"></div>
+          <div class="lock-scrim" id="lock-scrim" hidden>
+            <div class="lock-icon">🔒</div>
+            <div id="lock-text">Watching</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FINISH -->
+    <section id="screen-finish" class="screen" data-screen="finish" hidden>
+      <div class="center-card">
+        <h1>Time's up! ⏰</h1>
+        <p class="muted">You made this drawing together — here's the word each of you had:</p>
+        <div class="reveal-row">
+          <div class="reveal-item">
+            <div class="reveal-emoji" id="reveal-emoji-a"></div>
+            <div class="muted">Player 1's word</div>
+            <div class="reveal-word" id="reveal-word-a"></div>
+          </div>
+          <div class="reveal-item">
+            <div class="reveal-emoji" id="reveal-emoji-b"></div>
+            <div class="muted">Player 2's word</div>
+            <div class="reveal-word" id="reveal-word-b"></div>
+          </div>
+        </div>
+        <canvas id="finish-canvas"></canvas>
+        <div class="finish-actions">
+          <button id="save-btn" class="btn">Save image</button>
+          <button id="again-btn" class="btn btn-primary">Play again</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ROOM FULL -->
+    <section id="screen-full" class="screen" data-screen="full" hidden>
+      <div class="center-card">
+        <h1>Game in progress</h1>
+        <p class="muted">Two players are already connected. If that's wrong, ask them to close this page and retry.</p>
+        <button id="retry-btn" class="btn btn-primary">Retry</button>
+      </div>
+    </section>
+
+  </main>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
