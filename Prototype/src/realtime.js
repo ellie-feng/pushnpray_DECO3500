@@ -1,18 +1,28 @@
 // Thin wrapper around Firebase Realtime Database.
 //
-// Data model (single fixed room — only ever two players, keyed by role):
-//   room/presence/{A|B}: { clientId, readyRound }   (onDisconnect -> removed)
-//   room/session:         { state, round, startAt, endsAt, prompts:{A,B}, emojis:{A,B} }
-//   room/strokes/{id}:    { role, tool, color, size, points:[{x,y,p}], t }
-//   room/live/{A|B}:      { tool, color, size, points }   (in-progress stroke preview)
+// Data model:
+//   room/presence/{A|B}: { since, lastActive }   (onDisconnect -> removed)
+//     - existence = "connected" (used for the duet's solo-override)
+//     - lastActive = last heartbeat timestamp while on the board screen
+//       (used to detect "someone is actually using this station right now")
+//   room/session: { state, round, boardSince, startAt, endsAt,
+//                    prompts:{A,B}, emojis:{A,B} }
+//     - state "board"    -> default message-board mode, everyone idle
+//     - state "lobby"    -> a duet round has been triggered; onboarding +
+//                           hold-to-ready happen client-side during this
+//     - state "countdown" -> covers the countdown/playing/finished
+//                            sub-phases too; which one is showing is derived
+//                            client-side purely from startAt/endsAt vs now
+//   room/strokes/{id}: { role, tool, color, size, points:[{x,y,p}], t }
+//   room/live/{A|B}:   { tool, color, size, points }  (in-progress duet stroke)
+//   trails/{stationId}/notes/{id}: { strokes:[...], t }   (message-board posts)
 //
-// Readiness is tagged with the session's `round` number rather than being a
-// plain boolean: a device is "ready" only when its own readyRound equals the
-// CURRENT round. This is what makes replay safe — resetSession() bumps
-// `round` in the same transaction it flips state back to "lobby", so a
-// leftover readyRound from the round that just finished can never satisfy
-// the new round's check, no matter how the presence/session listeners
-// happen to be delivered relative to each other.
+// There's no role-claiming any more — a device's role is fixed by which
+// station it's dedicated to (see stations.js), so there's no contention to
+// resolve. Readiness is still tagged with the session's `round` number so a
+// leftover ready flag from a finished round can never satisfy the next
+// round's check, no matter how listeners happen to be delivered relative to
+// each other.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
   getDatabase,
@@ -22,6 +32,9 @@ import {
   update,
   remove,
   push,
+  query,
+  orderByChild,
+  limitToLast,
   runTransaction,
   onDisconnect,
   onChildAdded,
@@ -33,6 +46,12 @@ import { pickTwoDistinct } from "./prompts.js";
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
+// How long a board round waits, after returning to "board", before the
+// both-active trigger is allowed to fire again — avoids instantly
+// re-triggering a new duet while the pair is still standing there right
+// after the last one ended.
+const BOARD_COOLDOWN_MS = 12000;
+
 // ---------- server-synced clock ----------
 let serverOffset = 0;
 onValue(ref(db, ".info/serverTimeOffset"), (snap) => {
@@ -42,97 +61,66 @@ export function serverNow() {
   return Date.now() + serverOffset;
 }
 
-// ---------- identity ----------
-const clientId = (() => {
-  let id = sessionStorage.getItem("pnp_client_id");
-  if (!id) {
-    id = "c_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
-    sessionStorage.setItem("pnp_client_id", id);
-  }
-  return id;
-})();
-
-async function tryClaim(role) {
-  const roleRef = ref(db, `room/presence/${role}`);
-  const res = await runTransaction(roleRef, (current) => {
-    if (current && current.clientId && current.clientId !== clientId) {
-      return; // taken by someone else -> abort
-    }
-    const next = { clientId };
-    // Preserve readyRound across a reclaim (e.g. a mid-lobby refresh) — it's
-    // harmless either way since a stale round number just won't match the
-    // current one.
-    if (current && current.clientId === clientId && typeof current.readyRound === "number") {
-      next.readyRound = current.readyRound;
-    }
-    return next;
-  });
-  return res.committed;
-}
-
-function armDisconnectCleanup(role) {
-  onDisconnect(ref(db, `room/presence/${role}`)).remove();
+// ---------- presence (connection + activity heartbeat) ----------
+export function initPresence(role) {
+  const presRef = ref(db, `room/presence/${role}`);
+  set(presRef, { since: serverNow() });
+  onDisconnect(presRef).remove();
   onDisconnect(ref(db, `room/live/${role}`)).remove();
 }
 
-// Claims role "A" or "B" for this device. Reclaims the same role on refresh
-// (via sessionStorage). Returns null if both roles are already taken by
-// someone else — i.e. the game already has two players.
-export async function claimRole() {
-  const saved = sessionStorage.getItem("pnp_role");
-  if (saved && (await tryClaim(saved))) {
-    armDisconnectCleanup(saved);
-    return saved;
-  }
-  for (const role of ["A", "B"]) {
-    if (await tryClaim(role)) {
-      sessionStorage.setItem("pnp_role", role);
-      armDisconnectCleanup(role);
-      return role;
-    }
-  }
-  return null;
-}
-
-// Marks this device ready *for the given round*. `round` should be the
-// round number read from the current session (see myPrompt/round handling
-// in game.js) — tagging it this way is what makes stale readiness from a
-// previous round harmless.
-export function markReady(role, round) {
-  return update(ref(db, `room/presence/${role}`), { readyRound: round });
+let lastHeartbeatWrite = 0;
+// Call on real interaction (a touch/tap) while on the board screen. Cheap
+// to call often — throttled internally to about one write per 2s.
+export function touchActive(role) {
+  const now = performance.now();
+  if (now - lastHeartbeatWrite < 2000) return;
+  lastHeartbeatWrite = now;
+  update(ref(db, `room/presence/${role}`), { lastActive: serverNow() });
 }
 
 export function watchPresence(cb) {
   onValue(ref(db, "room/presence"), (snap) => cb(snap.val() || {}));
 }
 
+// ---------- session state machine ----------
 export function watchSession(cb) {
-  onValue(ref(db, "room/session"), (snap) => cb(snap.val() || { state: "lobby", round: 0 }));
+  onValue(ref(db, "room/session"), (snap) => cb(snap.val() || { state: "board", round: 0 }));
 }
 
-// Creates the very first round if none exists yet (picks prompts, round 1).
-// A no-op if a round already exists — safe to call from every device on
-// boot. Always resolves with the actual current session, whether this call
-// created it or not, so the caller can read prompts immediately.
-export async function ensureRound() {
+// Creates the very first session if none exists yet (starts in "board").
+// A no-op if a session already exists. Always resolves with the actual
+// current session either way, so the caller can use it immediately.
+export async function ensureSession() {
   const res = await runTransaction(ref(db, "room/session"), (current) => {
     if (current && typeof current.round === "number") return; // already initialized -> abort
-    const [pa, pb] = pickTwoDistinct();
-    return {
-      state: "lobby",
-      round: 1,
-      prompts: { A: pa.word, B: pb.word },
-      emojis: { A: pa.emoji, B: pb.emoji },
-    };
+    return { state: "board", round: 0, boardSince: serverNow() };
   });
   return res.snapshot.val();
 }
 
-// Moves lobby -> countdown, scheduling a synced start time. Prompts were
-// already picked when the round started (ensureRound/resetSession), so this
-// just flips state/timing and preserves everything else. Safe to call from
-// both devices at once — the transaction ensures only the first call
-// actually takes effect.
+// board -> lobby: picks fresh prompts and starts a new round, but only once
+// the cooldown since the last round has elapsed. Safe to call from both
+// devices at once — the transaction ensures only one call actually takes
+// effect, and it silently no-ops (not an error) if conditions aren't met.
+export async function tryTriggerDuet() {
+  await runTransaction(ref(db, "room/session"), (current) => {
+    if (!current || current.state !== "board") return; // abort: not idle
+    const boardSince = current.boardSince || 0;
+    if (serverNow() - boardSince < BOARD_COOLDOWN_MS) return; // abort: still cooling down
+    const [pa, pb] = pickTwoDistinct();
+    return {
+      state: "lobby",
+      round: (current.round || 0) + 1,
+      prompts: { A: pa.word, B: pb.word },
+      emojis: { A: pa.emoji, B: pb.emoji },
+    };
+  });
+}
+
+// lobby -> countdown: schedules a synced start time. Prompts were already
+// picked when the round started, so this just flips state/timing. Safe to
+// call from both devices at once.
 export async function tryStartCountdown() {
   await runTransaction(ref(db, "room/session"), (current) => {
     if (!current || current.state !== "lobby") return; // abort, already started
@@ -146,28 +134,24 @@ export async function tryStartCountdown() {
   });
 }
 
-// Starts a new round: bumps `round` and picks fresh prompts in the SAME
-// transaction as flipping state back to "lobby" — a single atomic write on
-// one path, not sequential set()/remove()/update() calls. That's what
-// guarantees a client can never observe "lobby" while old readiness from
-// the finished round could still satisfy the check (see module doc above).
-export async function resetSession() {
+// Back to the message board once the finish screen has had its moment.
+export async function returnToBoard() {
   await runTransaction(ref(db, "room/session"), (current) => {
-    const round = ((current && current.round) || 0) + 1;
-    const [pa, pb] = pickTwoDistinct();
-    return {
-      state: "lobby",
-      round,
-      prompts: { A: pa.word, B: pb.word },
-      emojis: { A: pa.emoji, B: pb.emoji },
-    };
+    if (!current || current.state === "board") return; // nothing to do
+    return { state: "board", round: current.round, boardSince: serverNow() };
   });
   await remove(ref(db, "room/strokes"));
   await remove(ref(db, "room/live/A"));
   await remove(ref(db, "room/live/B"));
 }
 
-// ---------- strokes ----------
+// Marks this device ready *for the given round* (see module doc above for
+// why readiness is round-tagged).
+export function markReady(role, round) {
+  return update(ref(db, `room/presence/${role}`), { readyRound: round });
+}
+
+// ---------- duet strokes ----------
 export function commitStroke(stroke) {
   const strokeRef = push(ref(db, "room/strokes"));
   set(strokeRef, stroke);
@@ -184,7 +168,7 @@ export function watchStrokes(onAdd, onRemove) {
   onChildRemoved(strokesRef, (snap) => onRemove(snap.key));
 }
 
-// ---------- in-progress stroke preview ----------
+// ---------- duet in-progress stroke preview ----------
 export function publishLive(role, data) {
   set(ref(db, `room/live/${role}`), data);
 }
@@ -195,4 +179,22 @@ export function clearLive(role) {
 
 export function watchLive(role, cb) {
   onValue(ref(db, `room/live/${role}`), (snap) => cb(snap.val()));
+}
+
+// ---------- message-board trail ----------
+export function postNote(stationId, strokes) {
+  const noteRef = push(ref(db, `trails/${stationId}/notes`));
+  set(noteRef, { strokes, t: Date.now() });
+}
+
+export function watchTrail(stationId, cb, max = 30) {
+  const q = query(ref(db, `trails/${stationId}/notes`), orderByChild("t"), limitToLast(max));
+  onValue(q, (snap) => {
+    const list = [];
+    snap.forEach((child) => {
+      list.push({ id: child.key, ...child.val() });
+    });
+    list.reverse(); // newest first
+    cb(list);
+  });
 }

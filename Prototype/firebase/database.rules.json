@@ -12,6 +12,12 @@
         "A": { ".write": true },
         "B": { ".write": true }
       }
+    },
+    "trails": {
+      ".read": true,
+      "$station": {
+        "notes": { ".write": true }
+      }
     }
   }
 }

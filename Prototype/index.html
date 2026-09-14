@@ -18,11 +18,41 @@
 
   <main id="app">
 
-    <!-- JOIN (claiming a role) -->
-    <section id="screen-join" class="screen" data-screen="join">
-      <div class="center-card">
-        <h1 class="logo">🖊️ Push'n'Pray</h1>
-        <p class="muted">Connecting&hellip;</p>
+    <!-- MESSAGE BOARD (default state) -->
+    <section id="screen-board" class="screen" data-screen="board">
+      <div class="board-wrap">
+        <div class="board-header">
+          <span class="board-icon" id="board-icon"></span>
+          <span class="board-label" id="board-label"></span>
+        </div>
+        <p class="board-prompt" id="board-prompt-text"></p>
+
+        <div class="note-composer">
+          <canvas id="note-canvas"></canvas>
+        </div>
+
+        <div class="note-toolbar" id="note-toolbar">
+          <button class="tool-btn active" data-tool="pen" title="Pen">✏️</button>
+          <button class="tool-btn" data-tool="highlighter" title="Highlighter">🖍️</button>
+          <button class="tool-btn" data-tool="eraser" title="Eraser">🧼</button>
+          <div class="note-swatches" id="note-swatches"></div>
+          <button class="size-btn" data-size="s">S</button>
+          <button class="size-btn active" data-size="m">M</button>
+          <button class="size-btn" data-size="l">L</button>
+          <button class="btn" id="note-clear-btn">Clear</button>
+          <button class="btn btn-primary" id="note-post-btn">Post</button>
+        </div>
+
+        <div class="trail" id="trail-list"></div>
+      </div>
+    </section>
+
+    <!-- ALERT (both stations just became active) -->
+    <section id="screen-alert" class="screen" data-screen="alert" hidden>
+      <div class="center-card alert-card">
+        <div class="alert-icon">🎉</div>
+        <h1>You're both here!</h1>
+        <p class="muted">Time to draw something together.</p>
       </div>
     </section>
 
@@ -124,17 +154,18 @@
         <canvas id="finish-canvas"></canvas>
         <div class="finish-actions">
           <button id="save-btn" class="btn">Save image</button>
-          <button id="again-btn" class="btn btn-primary">Play again</button>
+          <button id="done-btn" class="btn btn-primary">Done</button>
         </div>
+        <p class="muted small" id="finish-countdown"></p>
       </div>
     </section>
 
-    <!-- ROOM FULL -->
-    <section id="screen-full" class="screen" data-screen="full" hidden>
+    <!-- SETUP HELP (missing/unknown ?station=) -->
+    <section id="screen-setup" class="screen" data-screen="setup" hidden>
       <div class="center-card">
-        <h1>Game in progress</h1>
-        <p class="muted">Two players are already connected. If that's wrong, ask them to close this page and retry.</p>
-        <button id="retry-btn" class="btn btn-primary">Retry</button>
+        <h1>🖊️ Push'n'Pray</h1>
+        <p class="muted">This link doesn't say which station this iPad is. Add one of these to the URL:</p>
+        <ul class="setup-list" id="setup-list"></ul>
       </div>
     </section>
 
