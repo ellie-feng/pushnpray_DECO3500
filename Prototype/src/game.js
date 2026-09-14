@@ -1,28 +1,48 @@
-// Game state machine: role, presence, synced session timing, turn logic,
-// and all the screen/HUD updates that follow from it.
+// Top-level state machine: message-board mode (default) vs. the duet
+// drawing minigame, which triggers automatically when both stations are
+// genuinely active at the same time. Also owns the synced duet timing/turn
+// logic and all the screen/HUD updates that follow from it.
 import * as rt from "./realtime.js";
 import { DrawingCanvas } from "./canvas.js";
+import { NoteComposer, renderNoteThumbnail } from "./board.js";
 
 const TURN_MS = 30000;
+// How fresh a heartbeat must be to count as "someone is using this station
+// right now" for the purposes of triggering a duet.
+const ACTIVE_WINDOW_MS = 9000;
+// How long the finish/reveal screen stays up before auto-returning to the
+// board (a "Done" button can also skip this early).
+const FINISH_VIEW_MS = 10000;
 
 let els = null;
-let role = null;
+let station = null; // { id, label, icon, prompts, duetRole }
+let role = null; // "A" | "B" — fixed by station, never claimed
 let canvasEngine = null;
+let noteComposer = null;
 let presence = {};
-let session = { state: "lobby", round: 0 };
+let session = { state: "board", round: 0 };
 let myStrokeIds = [];
 
-let localActive = false; // becomes true once onboarding is done
 let currentScreenName = null;
 let currentCanDraw = false;
+let lastServerState = null; // for detecting session.state edges (board -> lobby, etc.)
+let localOnboardingSeen = false; // per-round: has this device clicked through onboarding yet
+let alertTimer = null;
+let localAlertSeen = false;
 let lastTurnRole = null;
 let lastTickSecond = null;
 let finishShown = false;
+let finishReturnAt = null;
+let returnRequested = false;
 let bannerTimeout = null;
 let audioCtx = null;
+let onDuetStartCallbacks = [];
+let boardPrompt = "";
 
-export async function init(domEls) {
+export async function init(domEls, stationConfig) {
   els = domEls;
+  station = stationConfig;
+  role = station.duetRole;
 
   canvasEngine = new DrawingCanvas(els.canvasBase, els.canvasLive, {
     canDraw: () => currentCanDraw,
@@ -38,21 +58,18 @@ export async function init(domEls) {
       canvasEngine.registerOwnStroke(id, stroke);
     },
   });
-
-  role = await rt.claimRole();
-  if (!role) return false;
   canvasEngine.setMyRole(role);
 
-  // Make sure a round (with prompts already picked) exists before we ever
-  // show onboarding — that's what lets onboarding introduce the player's
-  // actual word instead of a generic teaser.
-  session = (await rt.ensureRound()) || session;
+  noteComposer = new NoteComposer(els.noteCanvas);
+
+  rt.initPresence(role);
+  session = (await rt.ensureSession()) || session;
 
   rt.watchPresence((p) => {
     presence = p;
   });
   rt.watchSession((s) => {
-    session = s || { state: "lobby", round: 0 };
+    session = s || { state: "board", round: 0 };
   });
   rt.watchStrokes(
     (id, stroke) => canvasEngine.addStrokeIfNew(id, stroke),
@@ -67,6 +84,7 @@ export async function init(domEls) {
   rt.watchLive("B", (data) => {
     if (role !== "B") canvasEngine.setRemoteLive("B", data);
   });
+  rt.watchTrail(station.id, (notes) => renderTrail(notes));
 
   setInterval(tick, 100);
   return true;
@@ -75,24 +93,28 @@ export async function init(domEls) {
 export function myRole() {
   return role;
 }
+export function stationInfo() {
+  return station;
+}
 
-// This round's prompt for the local player, or null if not yet available.
+// This round's word for the local player, or null if not yet available.
 export function myPrompt() {
   const word = session.prompts && session.prompts[role];
   const emoji = session.emojis && session.emojis[role];
   return word ? { word, emoji } : null;
 }
 
-export function enterLobby() {
-  localActive = true;
+// main.js registers callbacks here (more than one — the onboarding
+// carousel and the ready-button UI each need to reset independently)
+// to run whenever a fresh duet round starts.
+export function onDuetStart(cb) {
+  onDuetStartCallbacks.push(cb);
 }
 
-// "Play again": stop auto-managing screens so the shared session flipping
-// back to "lobby" doesn't jump straight past onboarding to the ready
-// screen. main.js pairs this with showing the onboarding screen itself.
-export function exitToOnboarding() {
-  localActive = false;
-  currentScreenName = null;
+// Called by main.js when the "Let's go" button on the last onboarding card
+// is pressed — reveals the hold-to-ready screen for the rest of this round.
+export function confirmOnboarding() {
+  localOnboardingSeen = true;
 }
 
 export function setTool(t) {
@@ -113,22 +135,46 @@ export function markReady() {
   rt.markReady(role, round);
 }
 
+// Call on real interaction (touch/tap) anywhere on the board screen — this
+// is the heartbeat that determines whether this station counts as "active"
+// for the both-active duet trigger.
+export function touchActive() {
+  rt.touchActive(role);
+}
+
+// ---------- message board ----------
+export function setNoteTool(t) {
+  noteComposer.setTool(t);
+}
+export function setNoteColor(c) {
+  noteComposer.setColor(c);
+}
+export function setNoteSize(s) {
+  noteComposer.setSize(s);
+}
+export function clearNote() {
+  noteComposer.clear();
+}
+export function noteIsEmpty() {
+  return noteComposer.isEmpty();
+}
+export function postNote() {
+  if (noteComposer.isEmpty()) return;
+  rt.postNote(station.id, noteComposer.exportStrokes());
+  noteComposer.clear();
+}
+
+// Leaving the finish screen early instead of waiting out FINISH_VIEW_MS.
+export function skipToBoard() {
+  rt.returnToBoard();
+}
+
 export function unlockAudio() {
   if (!audioCtx) {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     audioCtx = new Ctx();
   }
   if (audioCtx.state === "suspended") audioCtx.resume();
-}
-
-export async function playAgain() {
-  finishShown = false;
-  lastTurnRole = null;
-  lastTickSecond = null;
-  currentScreenName = null;
-  myStrokeIds = [];
-  canvasEngine.clearAll();
-  await rt.resetSession();
 }
 
 export function getFinishDataUrl() {
@@ -140,23 +186,55 @@ function tick() {
 }
 
 function render() {
-  if (!localActive) return;
   currentCanDraw = false;
   const now = rt.serverNow();
-  const state = session.state;
+  const state = session.state || "board";
 
-  if (!state || state === "lobby") {
-    // Every game cycle passes through "lobby" on *every* client (it's
-    // shared session state), so this is the reliable place to clear
-    // per-round flags — not just in playAgain(), which only runs on the
-    // device that tapped the button.
+  if (state !== lastServerState) {
+    if (state === "board") {
+      pickBoardPrompt(); // fresh prompt each time this station returns to idle
+    }
+    if (state === "lobby") {
+      localOnboardingSeen = false;
+      localAlertSeen = false;
+      clearTimeout(alertTimer);
+      alertTimer = null;
+      onDuetStartCallbacks.forEach((cb) => cb());
+      unlockAudio();
+      playChime(660);
+    }
+    lastServerState = state;
+  }
+
+  if (state === "board") {
     finishShown = false;
     lastTurnRole = null;
     lastTickSecond = null;
-    showScreen("lobby");
-    updateLobby();
+    showScreen("board");
+    updateBoard();
     return;
   }
+
+  if (state === "lobby") {
+    if (!localAlertSeen) {
+      showScreen("alert");
+      if (!alertTimer) {
+        alertTimer = setTimeout(() => {
+          localAlertSeen = true;
+          alertTimer = null;
+        }, 2500);
+      }
+    } else if (!localOnboardingSeen) {
+      showScreen("onboarding");
+    } else {
+      showScreen("lobby");
+      updateLobby();
+    }
+    return;
+  }
+
+  // state === "countdown" covers the countdown/playing/finished sub-phases
+  // too — which one is showing is derived purely from time vs now.
   if (now < session.startAt) {
     showScreen("countdown");
     updateCountdown(session.startAt - now);
@@ -168,7 +246,7 @@ function render() {
     return;
   }
   showScreen("finish");
-  updateFinish();
+  updateFinish(now);
 }
 
 function showScreen(name) {
@@ -180,13 +258,63 @@ function showScreen(name) {
   if (name === "play") {
     // The canvas measures its own size on resize/orientationchange only;
     // while `#screen-play` was `hidden` it had zero size, so re-measure now
-    // that it's visible. Do this synchronously, not via requestAnimationFrame:
-    // rAF never fires while a tab isn't actively composited (e.g. briefly
-    // backgrounded), which would leave the canvas stuck at a 1x1 fallback
-    // size forever. Reading layout geometry right after toggling `hidden`
-    // forces the browser to flush layout immediately, so this is accurate
-    // regardless of visibility/compositing state.
+    // that it's visible. Synchronous, not requestAnimationFrame — rAF never
+    // fires while a tab isn't actively composited, which would leave the
+    // canvas stuck at a 1x1 fallback size forever. Reading layout geometry
+    // right after toggling `hidden` forces the browser to flush layout
+    // immediately, so this is accurate regardless of visibility state.
     canvasEngine.resize();
+  }
+  if (name === "board") {
+    noteComposer.resize();
+  }
+}
+
+// Internal role identifiers stay "A"/"B" (the data model, room keys, etc.) —
+// this is just the user-facing name for each.
+function roleName(r) {
+  return r === "A" ? "Player 1" : "Player 2";
+}
+
+function isActive(p) {
+  if (!p || typeof p.lastActive !== "number") return false;
+  return rt.serverNow() - p.lastActive < ACTIVE_WINDOW_MS;
+}
+
+function pickBoardPrompt() {
+  const list = station.prompts;
+  boardPrompt = list[Math.floor(Math.random() * list.length)];
+  if (els.boardPromptText) els.boardPromptText.textContent = boardPrompt;
+}
+
+function updateBoard() {
+  if (els.boardIcon) els.boardIcon.textContent = station.icon;
+  if (els.boardLabel) els.boardLabel.textContent = station.label;
+
+  const other = role === "A" ? "B" : "A";
+  if (isActive(presence[role]) && isActive(presence[other])) {
+    rt.tryTriggerDuet();
+  }
+}
+
+function renderTrail(notes) {
+  if (!els.trailList) return;
+  els.trailList.innerHTML = "";
+  if (notes.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "trail-empty muted";
+    empty.textContent = "No notes here yet — be the first.";
+    els.trailList.appendChild(empty);
+    return;
+  }
+  for (const note of notes) {
+    const item = document.createElement("div");
+    item.className = "trail-item";
+    const cv = document.createElement("canvas");
+    cv.className = "trail-canvas";
+    item.appendChild(cv);
+    els.trailList.appendChild(item);
+    renderNoteThumbnail(cv, note.strokes);
   }
 }
 
@@ -211,12 +339,6 @@ function updateLobby() {
 
 function updateCountdown(msLeft) {
   els.countdownNumber.textContent = String(Math.max(1, Math.ceil(msLeft / 1000)));
-}
-
-// Internal role identifiers stay "A"/"B" (the data model, room keys, etc.) —
-// this is just the user-facing name for each.
-function roleName(r) {
-  return r === "A" ? "Player 1" : "Player 2";
 }
 
 function fmt(ms) {
@@ -278,28 +400,41 @@ function updatePlay(now) {
   }
 }
 
-function updateFinish() {
-  if (finishShown) return;
-  finishShown = true;
-  const prompts = session.prompts || {};
-  const emojis = session.emojis || {};
-  els.revealWordA.textContent = prompts.A || "";
-  els.revealEmojiA.textContent = emojis.A || "";
-  els.revealWordB.textContent = prompts.B || "";
-  els.revealEmojiB.textContent = emojis.B || "";
+function updateFinish(now) {
+  if (!finishShown) {
+    finishShown = true;
+    returnRequested = false;
+    finishReturnAt = now + FINISH_VIEW_MS;
 
-  const fctx = els.finishCanvas.getContext("2d");
-  els.finishCanvas.width = els.canvasBase.width;
-  els.finishCanvas.height = els.canvasBase.height;
-  // Scale the display size to fit the finish card, preserving aspect ratio
-  // (the base canvas's pixel buffer is devicePixelRatio-scaled and much
-  // larger than any sensible on-screen size here).
-  const maxW = 560;
-  const maxH = 280;
-  const scale = Math.min(maxW / els.finishCanvas.width, maxH / els.finishCanvas.height, 1);
-  els.finishCanvas.style.width = `${els.finishCanvas.width * scale}px`;
-  els.finishCanvas.style.height = `${els.finishCanvas.height * scale}px`;
-  fctx.drawImage(els.canvasBase, 0, 0);
+    const prompts = session.prompts || {};
+    const emojis = session.emojis || {};
+    els.revealWordA.textContent = prompts.A || "";
+    els.revealEmojiA.textContent = emojis.A || "";
+    els.revealWordB.textContent = prompts.B || "";
+    els.revealEmojiB.textContent = emojis.B || "";
+
+    const fctx = els.finishCanvas.getContext("2d");
+    els.finishCanvas.width = els.canvasBase.width;
+    els.finishCanvas.height = els.canvasBase.height;
+    // Scale the display size to fit the finish card, preserving aspect
+    // ratio (the base canvas's pixel buffer is devicePixelRatio-scaled and
+    // much larger than any sensible on-screen size here).
+    const maxW = 560;
+    const maxH = 260;
+    const scale = Math.min(maxW / els.finishCanvas.width, maxH / els.finishCanvas.height, 1);
+    els.finishCanvas.style.width = `${els.finishCanvas.width * scale}px`;
+    els.finishCanvas.style.height = `${els.finishCanvas.height * scale}px`;
+    fctx.drawImage(els.canvasBase, 0, 0);
+  }
+
+  const secLeft = Math.max(0, Math.ceil((finishReturnAt - now) / 1000));
+  if (els.finishCountdown) {
+    els.finishCountdown.textContent = `Back to the board in ${secLeft}s`;
+  }
+  if (!returnRequested && now >= finishReturnAt) {
+    returnRequested = true;
+    rt.returnToBoard();
+  }
 }
 
 function flashBanner(text) {
