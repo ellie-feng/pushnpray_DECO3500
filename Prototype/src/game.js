@@ -13,21 +13,21 @@ const ACTIVE_WINDOW_MS = 9000;
 // How long the finish/reveal screen stays up before auto-returning to the
 // board (a "Done" button can also skip this early).
 const FINISH_VIEW_MS = 10000;
-// Size of one grid cell on the shared board canvas, in CSS px.
+// Size of one grid cell on the shared board canvas, in CSS px — must match
+// the .board-grid gap/padding values in styles.css (checked at the one
+// place that does the pixel math, see scrollToLatest()).
 const CELL_W = 220;
 const CELL_H = 160;
-// How many empty cells to always keep available beyond the current
-// occupied extent, in every direction — this is what makes the board feel
-// like it keeps growing rather than being a fixed size.
-const BOARD_PAD = 2;
+const GRID_GAP = 12;
+const GRID_PAD = 24;
 
 let els = null;
 let station = null; // { id, label, icon, prompts, duetRole }
 let role = null; // "A" | "B" — fixed by station, never claimed
 let canvasEngine = null;
-let boardNotes = {}; // "gx_gy" -> { strokes, t }
-let composeCell = null; // { gx, gy } this device is currently drawing into, or null
-let composeComposer = null; // NoteComposer for composeCell
+let boardNotes = {}; // "<index>" -> { strokes, t } — answers fill in posting order
+let composeIndex = null; // index this device is currently drawing into, or null
+let composeComposer = null; // NoteComposer for composeIndex
 let noteToolPrefs = { tool: "pen", color: "#232733", size: "m" };
 let presence = {};
 let session = { state: "board", round: 0 };
@@ -37,6 +37,7 @@ let myRedoStack = []; // strokes this device has undone, poppable to redo — cl
 let currentScreenName = null;
 let currentCanDraw = false;
 let lastServerState = null; // for detecting session.state edges (board -> lobby, etc.)
+let localLandingSeen = false; // per visit: has this device tapped past the landing splash yet
 let localOnboardingSeen = false; // per-round: has this device clicked through onboarding yet
 let alertTimer = null;
 let localAlertSeen = false;
@@ -49,7 +50,7 @@ let bannerTimeout = null;
 let audioCtx = null;
 let onDuetStartCallbacks = [];
 let boardPrompt = "";
-let boardViewCentered = false; // per visit: has the view been scrolled to existing content yet
+let boardScrolled = false; // per visit: has the view been scrolled to existing content yet
 let trailLoaded = false; // has watchTrail delivered its first real snapshot yet
 
 export async function init(domEls, stationConfig) {
@@ -101,7 +102,7 @@ export async function init(domEls, stationConfig) {
     trailLoaded = true;
     // Don't tear down a cell this device is actively drawing into just
     // because the shared list changed elsewhere — see renderBoardGrid().
-    if (!composeCell) renderBoardGrid();
+    if (composeIndex === null) renderBoardGrid();
   });
 
   setInterval(tick, 100);
@@ -170,7 +171,7 @@ export function touchActive() {
   rt.touchActive(role);
 }
 
-// ---------- message board: shared infinite canvas ----------
+// ---------- message board: chronological shared gallery ----------
 // Tool prefs persist across cells (picking red pen once keeps it selected
 // for the next note too) and apply immediately to whichever cell is
 // currently being composed, if any.
@@ -193,16 +194,10 @@ export function redoNote() {
   if (composeComposer) composeComposer.redo();
 }
 
-// HUD "+ Add" button: jumps straight to the nearest empty cell instead of
-// making people hunt for one by panning around.
-export function addAnswer() {
-  if (composeCell) return; // already composing somewhere
-  const cell = findFirstEmptyCell();
-  startCompose(cell.gx, cell.gy);
-  requestAnimationFrame(() => {
-    const el = els.boardGrid && els.boardGrid.querySelector(".board-cell.composing");
-    if (el) el.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
-  });
+// Called when the landing splash is tapped — reveals the board itself for
+// the rest of this visit.
+export function confirmLanding() {
+  localLandingSeen = true;
 }
 
 // Leaving the finish screen early instead of waiting out FINISH_VIEW_MS.
@@ -236,12 +231,13 @@ function render() {
       // A duet got triggered while this device had a note half-drawn —
       // abandon it rather than let renderBoardGrid() try to resurrect a
       // composer bound to a canvas that's about to be torn down.
-      composeCell = null;
+      composeIndex = null;
       composeComposer = null;
     }
     if (state === "board") {
       pickBoardPrompt(); // fresh prompt each time this station returns to idle
-      boardViewCentered = false; // re-center on what's already there, once, per visit
+      boardScrolled = false; // re-scroll to the latest content, once, per visit
+      localLandingSeen = false; // show the attract splash again for the next visitor
     }
     if (state === "lobby") {
       localOnboardingSeen = false;
@@ -265,8 +261,12 @@ function render() {
     finishShown = false;
     lastTurnRole = null;
     lastTickSecond = null;
+    updateBoard(); // both-active trigger check runs regardless of the landing splash
+    if (!localLandingSeen) {
+      showScreen("landing");
+      return;
+    }
     showScreen("board");
-    updateBoard();
     return;
   }
 
@@ -352,94 +352,55 @@ function updateBoard() {
   }
 }
 
-// A cell key is only ever "gx_gy" (both integers, gx/gy can be negative) —
-// written that way by this app alone. Filtering on the shape defends
-// against anything else ending up under this path corrupting the grid's
-// bounds (e.g. NaN from a malformed key poisoning a Math.min/max chain).
-const CELL_KEY_RE = /^(-?\d+)_(-?\d+)$/;
-
-function parseCellKey(key) {
-  const m = CELL_KEY_RE.exec(key);
-  return m ? { gx: Number(m[1]), gy: Number(m[2]) } : null;
+// Answers fill the grid in posting order, left to right then wrapping —
+// no free placement any more. A note's key is just its index as a string
+// ("0", "1", "2", ...), which also doubles as its claim: posting to that
+// exact key is a transaction that aborts if it's already taken (see
+// realtime.js), so the "next" cell can never end up claimed twice even if
+// two devices somehow tapped it at the same instant.
+function noteCount() {
+  return Object.keys(boardNotes).length;
 }
 
-// The actual occupied extent, unpadded — null bounds (all zero, any:false)
-// if the board has no notes yet.
-function occupiedExtent() {
-  let minGX = 0;
-  let maxGX = 0;
-  let minGY = 0;
-  let maxGY = 0;
-  let any = false;
-  for (const key of Object.keys(boardNotes)) {
-    const cell = parseCellKey(key);
-    if (!cell) continue;
-    if (!any) {
-      minGX = maxGX = cell.gx;
-      minGY = maxGY = cell.gy;
-      any = true;
-    } else {
-      if (cell.gx < minGX) minGX = cell.gx;
-      if (cell.gx > maxGX) maxGX = cell.gx;
-      if (cell.gy < minGY) minGY = cell.gy;
-      if (cell.gy > maxGY) maxGY = cell.gy;
-    }
-  }
-  return { minGX, maxGX, minGY, maxGY, any };
+// How many columns fit the current viewport width, so the gallery only
+// ever needs to scroll vertically (like a feed) rather than needing both
+// scroll directions.
+function computeCols() {
+  const vp = els.boardViewport;
+  const width = vp && vp.clientWidth > 0 ? vp.clientWidth : 940;
+  return Math.max(1, Math.floor((width - 2 * GRID_PAD + GRID_GAP) / (CELL_W + GRID_GAP)));
 }
 
-function boardBounds() {
-  const e = occupiedExtent();
-  return {
-    minGX: e.minGX - BOARD_PAD,
-    maxGX: e.maxGX + BOARD_PAD,
-    minGY: e.minGY - BOARD_PAD,
-    maxGY: e.maxGY + BOARD_PAD,
-  };
-}
-
-function findFirstEmptyCell() {
-  const { minGX, maxGX, minGY, maxGY } = boardBounds();
-  for (let gy = minGY; gy <= maxGY; gy++) {
-    for (let gx = minGX; gx <= maxGX; gx++) {
-      if (!boardNotes[`${gx}_${gy}`]) return { gx, gy };
-    }
-  }
-  // Unreachable in practice — BOARD_PAD always leaves empty cells around
-  // the occupied extent — but fall back to the origin rather than throw.
-  return { gx: 0, gy: 0 };
-}
-
-function startCompose(gx, gy) {
-  if (composeCell) return; // this device is already composing elsewhere
-  if (boardNotes[`${gx}_${gy}`]) return; // taken since the grid was drawn
-  composeCell = { gx, gy };
+function startCompose(index) {
+  if (composeIndex !== null) return; // this device is already composing elsewhere
+  if (boardNotes[String(index)]) return; // taken since the grid was drawn
+  composeIndex = index;
   renderBoardGrid();
 }
 
 function cancelCompose() {
-  composeCell = null;
+  composeIndex = null;
   composeComposer = null;
   renderBoardGrid();
 }
 
 async function postCompose() {
-  if (!composeCell || !composeComposer || composeComposer.isEmpty()) return;
-  const { gx, gy } = composeCell;
+  if (composeIndex === null || !composeComposer || composeComposer.isEmpty()) return;
+  const index = composeIndex;
   const strokes = composeComposer.exportStrokes();
-  composeCell = null;
+  composeIndex = null;
   composeComposer = null;
   try {
-    await rt.postNote(station.id, `${gx}_${gy}`, strokes);
+    await rt.postNote(station.id, String(index), strokes);
   } catch {
     // A rejected transaction (permission denied, a network blip) would
     // otherwise skip the render below entirely, leaving a stale
     // "composing" cell on screen with Cancel/Post buttons wired to a
     // composer that no longer exists. Falling through to renderBoardGrid()
-    // reverts the cell to empty either way — honest, since the note
-    // wasn't actually saved.
+    // reverts the cell to its "+" state either way — honest, since the
+    // note wasn't actually saved.
   }
-  // Whether this device's own transaction won the cell, someone else's did
+  // Whether this device's own transaction won the slot, someone else's did
   // in the meantime, or it failed outright, re-render from whatever
   // boardNotes ends up being once the watchTrail listener catches up.
   renderBoardGrid();
@@ -447,85 +408,88 @@ async function postCompose() {
 
 function renderBoardGrid() {
   if (!els.boardGrid) return;
-  if (els.noteToolbar) els.noteToolbar.classList.toggle("disabled", !composeCell);
+  if (els.noteToolbar) els.noteToolbar.classList.toggle("disabled", composeIndex === null);
 
-  const { minGX, maxGX, minGY, maxGY } = boardBounds();
-  const cols = maxGX - minGX + 1;
-  const rows = maxGY - minGY + 1;
+  const count = noteCount();
+  const cols = computeCols();
   els.boardGrid.style.gridTemplateColumns = `repeat(${cols}, ${CELL_W}px)`;
-  els.boardGrid.style.gridTemplateRows = `repeat(${rows}, ${CELL_H}px)`;
+  // No grid-template-rows — the row count isn't known ahead of time since
+  // the gallery only ever grows. grid-auto-rows gives every implicitly
+  // created row a fixed height instead (cells have no height of their own
+  // otherwise — their canvas is absolutely positioned and doesn't
+  // contribute to layout, so rows would collapse to ~0).
+  els.boardGrid.style.gridAutoRows = `${CELL_H}px`;
   els.boardGrid.innerHTML = "";
 
-  for (let gy = minGY; gy <= maxGY; gy++) {
-    for (let gx = minGX; gx <= maxGX; gx++) {
-      const key = `${gx}_${gy}`;
-      const note = boardNotes[key];
-      const cell = document.createElement("div");
-      cell.className = "board-cell";
+  // 0..count-1 are finished answers, in the order they were posted;
+  // index `count` is always the single open "+" slot.
+  for (let i = 0; i <= count; i++) {
+    const note = boardNotes[String(i)];
+    const cell = document.createElement("div");
+    cell.className = "board-cell";
 
-      if (note) {
-        cell.classList.add("filled");
-        const cv = document.createElement("canvas");
-        cell.appendChild(cv);
-        els.boardGrid.appendChild(cell);
-        renderNoteThumbnail(cv, note.strokes);
-      } else if (composeCell && composeCell.gx === gx && composeCell.gy === gy) {
-        cell.classList.add("composing");
-        const cv = document.createElement("canvas");
-        cell.appendChild(cv);
-        const actions = document.createElement("div");
-        actions.className = "board-cell-actions";
-        const cancelBtn = document.createElement("button");
-        cancelBtn.className = "btn";
-        cancelBtn.textContent = "Cancel";
-        cancelBtn.addEventListener("click", cancelCompose);
-        const postBtn = document.createElement("button");
-        postBtn.className = "btn btn-primary";
-        postBtn.textContent = "Post";
-        postBtn.addEventListener("click", postCompose);
-        actions.appendChild(cancelBtn);
-        actions.appendChild(postBtn);
-        cell.appendChild(actions);
-        els.boardGrid.appendChild(cell);
-        composeComposer = new NoteComposer(cv);
-        composeComposer.setTool(noteToolPrefs.tool);
-        composeComposer.setColor(noteToolPrefs.color);
-        composeComposer.setSize(noteToolPrefs.size);
-      } else {
-        cell.classList.add("empty");
-        cell.addEventListener("click", () => startCompose(gx, gy));
-        els.boardGrid.appendChild(cell);
-      }
+    if (note) {
+      cell.classList.add("filled");
+      const cv = document.createElement("canvas");
+      cell.appendChild(cv);
+      els.boardGrid.appendChild(cell);
+      renderNoteThumbnail(cv, note.strokes);
+    } else if (composeIndex === i) {
+      cell.classList.add("composing");
+      const cv = document.createElement("canvas");
+      cell.appendChild(cv);
+      const actions = document.createElement("div");
+      actions.className = "board-cell-actions";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.className = "btn";
+      cancelBtn.textContent = "Cancel";
+      cancelBtn.addEventListener("click", cancelCompose);
+      const postBtn = document.createElement("button");
+      postBtn.className = "btn btn-primary";
+      postBtn.textContent = "Post";
+      postBtn.addEventListener("click", postCompose);
+      actions.appendChild(cancelBtn);
+      actions.appendChild(postBtn);
+      cell.appendChild(actions);
+      els.boardGrid.appendChild(cell);
+      composeComposer = new NoteComposer(cv);
+      composeComposer.setTool(noteToolPrefs.tool);
+      composeComposer.setColor(noteToolPrefs.color);
+      composeComposer.setSize(noteToolPrefs.size);
+    } else {
+      // This is only ever the i === count slot — the one open spot.
+      cell.classList.add("next");
+      const plus = document.createElement("span");
+      plus.className = "board-cell-plus";
+      plus.textContent = "+";
+      cell.appendChild(plus);
+      cell.addEventListener("click", () => startCompose(i));
+      els.boardGrid.appendChild(cell);
     }
   }
 
   // Show people what's already there before nudging them to add their own:
   // once per visit to the board (not on every update — that would yank the
   // scroll position around while someone's actually browsing), scroll to
-  // whatever's already been posted instead of defaulting to the top-left
-  // corner of the padded (mostly empty) bounds. Gated on trailLoaded, not
-  // just "haven't centered yet" — the very first call here can happen
-  // before watchTrail's first snapshot arrives, and centering on that
-  // empty, wrong-shaped placeholder would burn the one shot before the
-  // real content (and its real bounds) shows up moments later.
-  if (!boardViewCentered && trailLoaded) {
-    boardViewCentered = true;
-    centerBoardView(minGX, minGY);
+  // the latest answers instead of defaulting to the top of a long gallery.
+  // Gated on trailLoaded, not just "haven't scrolled yet" — the very first
+  // call here can happen before watchTrail's first snapshot arrives, and
+  // scrolling based on that empty placeholder would burn the one shot
+  // before the real content (and its real count) arrives moments later.
+  if (!boardScrolled && trailLoaded) {
+    boardScrolled = true;
+    scrollToLatest();
   }
 }
 
-function centerBoardView(minGX, minGY) {
-  if (!els.boardViewport) return;
-  const extent = occupiedExtent();
-  const targetGX = extent.any ? (extent.minGX + extent.maxGX) / 2 : 0;
-  const targetGY = extent.any ? (extent.minGY + extent.maxGY) / 2 : 0;
-  const gap = 12; // must match .board-grid's CSS gap
-  const pad = 24; // must match .board-grid's CSS padding
-  const targetPxX = pad + (targetGX - minGX) * (CELL_W + gap) + CELL_W / 2;
-  const targetPxY = pad + (targetGY - minGY) * (CELL_H + gap) + CELL_H / 2;
+function scrollToLatest() {
   const vp = els.boardViewport;
-  vp.scrollLeft = Math.max(0, targetPxX - vp.clientWidth / 2);
-  vp.scrollTop = Math.max(0, targetPxY - vp.clientHeight / 2);
+  if (!vp) return;
+  // Scrolling to the bottom (not a specific cell's offset) is simplest and
+  // correct here: the grid only ever grows downward, so "all the way down"
+  // always means "the newest answers and the + slot", the same way opening
+  // a chat lands you on the most recent messages.
+  vp.scrollTop = vp.scrollHeight;
 }
 
 function setPill(el, p, round) {

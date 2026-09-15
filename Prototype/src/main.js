@@ -1,5 +1,5 @@
-// Boot + all the plain-UI wiring: station setup, the message-board screen
-// (prompt, shared grid canvas), the onboarding carousel, the
+// Boot + all the plain-UI wiring: the landing splash, the message-board
+// screen (prompt, shared grid gallery), the single-page onboarding, the
 // press-and-hold ready button, and the duet toolbar. Game/timer/canvas
 // logic — including the grid itself — lives in game.js.
 import * as game from "./game.js";
@@ -8,11 +8,13 @@ import { getStationFromUrl, STATIONS } from "./stations.js";
 const els = {
   screens: document.querySelectorAll(".screen"),
 
+  // landing
+  screenLanding: document.getElementById("screen-landing"),
+
   // board
   boardIcon: document.getElementById("board-icon"),
   boardLabel: document.getElementById("board-label"),
   boardPromptText: document.getElementById("board-prompt-text"),
-  boardAddBtn: document.getElementById("board-add-btn"),
   boardViewport: document.getElementById("board-viewport"),
   boardGrid: document.getElementById("board-grid"),
   noteToolbar: document.getElementById("note-toolbar"),
@@ -21,8 +23,7 @@ const els = {
   noteRedoBtn: document.getElementById("note-redo-btn"),
 
   // onboarding
-  onboardingCards: document.getElementById("onboarding-cards"),
-  onboardingDots: document.getElementById("onboarding-dots"),
+  onboardingCard: document.getElementById("onboarding-card"),
   onboardingNext: document.getElementById("onboarding-next"),
 
   // lobby
@@ -111,71 +112,27 @@ function wireSizeButtons(container, onSize) {
   });
 }
 
-// ---------- onboarding ----------
-const ONBOARDING = [
-  {
-    icon: "🎨",
-    title: "One shared canvas",
-    body: "You and the other player are creating <strong>one drawing together</strong>, live, on the same board. Everything you both add appears for both of you instantly.",
-  },
-  // Index 1 is special-cased in renderOnboarding() below — it reveals this
-  // device's actual word once the round has one. This fallback text only
-  // shows in the unlikely case the prompt isn't loaded yet.
-  {
-    icon: "💭",
-    title: "Your word",
-    body: "You'll each get a different word, with a picture, so it works across any language. Work it into the drawing however you like.",
-  },
-  {
-    icon: "⏱️",
-    title: "Taking turns",
-    body: "2:00 on the clock, in 30-second turns: Player 1, then Player 2, back and forth. Both screens always show the same time left. Not your turn? Watch what they add.",
-  },
-  {
-    icon: "🖌️",
-    title: "Your tools",
-    body: "Pen, highlighter, eraser, colours and sizes are along the side. Undo removes your own last mark. Ready? Let's go.",
-  },
-];
-let obIndex = 0;
-
-function wordCard() {
-  const p = game.myPrompt();
-  if (!p) return ONBOARDING[1];
-  return {
-    icon: p.emoji,
-    title: "Your word",
-    body: `Your word is <strong>${p.word}</strong>. Try to work it into the drawing somehow — and keep an eye on what your partner is adding too, since you're building <strong>one drawing together</strong>.`,
-  };
-}
-
+// ---------- onboarding: one page, the question front and centre ----------
 function renderOnboarding() {
-  const card = obIndex === 1 ? wordCard() : ONBOARDING[obIndex];
-  els.onboardingCards.innerHTML = `
-    <div class="ob-card">
-      <div class="ob-icon">${card.icon}</div>
-      <h2>${card.title}</h2>
-      <p>${card.body}</p>
-    </div>`;
-  els.onboardingDots.innerHTML = ONBOARDING.map(
-    (_, i) => `<span class="dot-step${i === obIndex ? " active" : ""}"></span>`
-  ).join("");
-  els.onboardingNext.textContent = obIndex === ONBOARDING.length - 1 ? "Let's go" : "Next";
+  const p = game.myPrompt();
+  const icon = p ? p.emoji : "🎨";
+  const question = p ? p.word : "Loading your question&hellip;";
+  els.onboardingCard.innerHTML = `
+    <div class="ob-icon">${icon}</div>
+    <p class="ob-eyebrow">Your question</p>
+    <h2 class="ob-question">${question}</h2>
+    <ul class="ob-rules">
+      <li><span class="ob-rule-icon">🎨</span>You and your partner are drawing your answers on <strong>one shared canvas</strong>, live.</li>
+      <li><span class="ob-rule-icon">⏱️</span>2:00 total, in 30-second turns — Player 1, then Player 2, back and forth.</li>
+      <li><span class="ob-rule-icon">👀</span>Not your turn? Watch what they're adding — you're building one picture together.</li>
+    </ul>`;
 }
 
 els.onboardingNext.addEventListener("click", () => {
-  if (obIndex < ONBOARDING.length - 1) {
-    obIndex++;
-    renderOnboarding();
-  } else {
-    game.confirmOnboarding();
-  }
+  game.confirmOnboarding();
 });
 
-game.onDuetStart(() => {
-  obIndex = 0;
-  renderOnboarding();
-});
+game.onDuetStart(renderOnboarding);
 
 // ---------- press-and-hold ready ----------
 const HOLD_MS = 1300;
@@ -284,13 +241,22 @@ wireToolButtons(els.noteToolbar, (t) => game.setNoteTool(t));
 wireSizeButtons(els.noteToolbar, (s) => game.setNoteSize(s));
 els.noteUndoBtn.addEventListener("click", () => game.undoNote());
 els.noteRedoBtn.addEventListener("click", () => game.redoNote());
-els.boardAddBtn.addEventListener("click", () => game.addAnswer());
 
 // Any real interaction on the board screen counts as "active" — this is
 // the signal the both-active duet trigger watches for.
 document.getElementById("screen-board").addEventListener("pointerdown", () => {
   game.unlockAudio();
   game.touchActive();
+});
+
+// ---------- landing (attract) screen ----------
+// Tapping it both reveals the board and counts as activity — someone
+// standing at the station interacting with it is "active" regardless of
+// which screen they're looking at.
+els.screenLanding.addEventListener("click", () => {
+  game.unlockAudio();
+  game.touchActive();
+  game.confirmLanding();
 });
 
 // ---------- boot ----------
