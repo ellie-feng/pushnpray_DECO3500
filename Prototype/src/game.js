@@ -49,6 +49,8 @@ let bannerTimeout = null;
 let audioCtx = null;
 let onDuetStartCallbacks = [];
 let boardPrompt = "";
+let boardViewCentered = false; // per visit: has the view been scrolled to existing content yet
+let trailLoaded = false; // has watchTrail delivered its first real snapshot yet
 
 export async function init(domEls, stationConfig) {
   els = domEls;
@@ -96,6 +98,7 @@ export async function init(domEls, stationConfig) {
   });
   rt.watchTrail(station.id, (notes) => {
     boardNotes = notes;
+    trailLoaded = true;
     // Don't tear down a cell this device is actively drawing into just
     // because the shared list changed elsewhere — see renderBoardGrid().
     if (!composeCell) renderBoardGrid();
@@ -238,6 +241,7 @@ function render() {
     }
     if (state === "board") {
       pickBoardPrompt(); // fresh prompt each time this station returns to idle
+      boardViewCentered = false; // re-center on what's already there, once, per visit
     }
     if (state === "lobby") {
       localOnboardingSeen = false;
@@ -359,7 +363,9 @@ function parseCellKey(key) {
   return m ? { gx: Number(m[1]), gy: Number(m[2]) } : null;
 }
 
-function boardBounds() {
+// The actual occupied extent, unpadded — null bounds (all zero, any:false)
+// if the board has no notes yet.
+function occupiedExtent() {
   let minGX = 0;
   let maxGX = 0;
   let minGY = 0;
@@ -379,11 +385,16 @@ function boardBounds() {
       if (cell.gy > maxGY) maxGY = cell.gy;
     }
   }
+  return { minGX, maxGX, minGY, maxGY, any };
+}
+
+function boardBounds() {
+  const e = occupiedExtent();
   return {
-    minGX: minGX - BOARD_PAD,
-    maxGX: maxGX + BOARD_PAD,
-    minGY: minGY - BOARD_PAD,
-    maxGY: maxGY + BOARD_PAD,
+    minGX: e.minGX - BOARD_PAD,
+    maxGX: e.maxGX + BOARD_PAD,
+    minGY: e.minGY - BOARD_PAD,
+    maxGY: e.maxGY + BOARD_PAD,
   };
 }
 
@@ -487,6 +498,34 @@ function renderBoardGrid() {
       }
     }
   }
+
+  // Show people what's already there before nudging them to add their own:
+  // once per visit to the board (not on every update — that would yank the
+  // scroll position around while someone's actually browsing), scroll to
+  // whatever's already been posted instead of defaulting to the top-left
+  // corner of the padded (mostly empty) bounds. Gated on trailLoaded, not
+  // just "haven't centered yet" — the very first call here can happen
+  // before watchTrail's first snapshot arrives, and centering on that
+  // empty, wrong-shaped placeholder would burn the one shot before the
+  // real content (and its real bounds) shows up moments later.
+  if (!boardViewCentered && trailLoaded) {
+    boardViewCentered = true;
+    centerBoardView(minGX, minGY);
+  }
+}
+
+function centerBoardView(minGX, minGY) {
+  if (!els.boardViewport) return;
+  const extent = occupiedExtent();
+  const targetGX = extent.any ? (extent.minGX + extent.maxGX) / 2 : 0;
+  const targetGY = extent.any ? (extent.minGY + extent.maxGY) / 2 : 0;
+  const gap = 12; // must match .board-grid's CSS gap
+  const pad = 24; // must match .board-grid's CSS padding
+  const targetPxX = pad + (targetGX - minGX) * (CELL_W + gap) + CELL_W / 2;
+  const targetPxY = pad + (targetGY - minGY) * (CELL_H + gap) + CELL_H / 2;
+  const vp = els.boardViewport;
+  vp.scrollLeft = Math.max(0, targetPxX - vp.clientWidth / 2);
+  vp.scrollTop = Math.max(0, targetPxY - vp.clientHeight / 2);
 }
 
 function setPill(el, p, round) {

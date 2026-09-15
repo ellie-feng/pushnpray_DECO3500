@@ -13,6 +13,7 @@ const els = {
   boardLabel: document.getElementById("board-label"),
   boardPromptText: document.getElementById("board-prompt-text"),
   boardAddBtn: document.getElementById("board-add-btn"),
+  boardViewport: document.getElementById("board-viewport"),
   boardGrid: document.getElementById("board-grid"),
   noteToolbar: document.getElementById("note-toolbar"),
   noteSwatches: document.getElementById("note-swatches"),
