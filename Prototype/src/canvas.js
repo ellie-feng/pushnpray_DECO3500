@@ -1,6 +1,8 @@
 // Two-layer drawing engine: a base canvas holds committed strokes, a live
 // canvas on top holds in-progress strokes (mine + the other player's) so
 // undo/resize only ever has to replay the committed layer.
+import { floodFillPixels } from "./floodfill.js";
+
 const SIZES = { s: 4, m: 9, l: 18 };
 
 export class DrawingCanvas {
@@ -96,8 +98,23 @@ export class DrawingCanvas {
     return { width: base, alpha: 1, composite: "source-over", constant: false };
   }
 
+  // A fill isn't a path at all — it's a single point plus a colour, and
+  // "replaying" it means re-running the flood fill against whatever the
+  // canvas looks like at this point in the stroke history. Deterministic
+  // as long as everything before it replays in the same order, which
+  // strokes already do (see _redrawBase).
+  _fillAt(ctx, point, color) {
+    const dpr = this.base.width / this.w;
+    const p = this._denorm(point);
+    floodFillPixels(ctx, ctx.canvas.width, ctx.canvas.height, p.x * dpr, p.y * dpr, color);
+  }
+
   _paintPath(ctx, points, tool, color, sizeKey) {
     if (!points || points.length === 0) return;
+    if (tool === "fill") {
+      this._fillAt(ctx, points[0], color);
+      return;
+    }
     const style = this._styleFor(tool, sizeKey);
     ctx.save();
     ctx.globalCompositeOperation = style.composite;
@@ -161,6 +178,13 @@ export class DrawingCanvas {
     this.strokes.set(id, stroke);
   }
 
+  // For redo: paints a stroke that already exists (e.g. was undone
+  // earlier) without going through the live pointer-drag flow. The caller
+  // is responsible for also calling registerOwnStroke so it's bookkept.
+  paintStrokeDirect(stroke) {
+    this._paintPath(this.bctx, stroke.points, stroke.tool, stroke.color, stroke.size);
+  }
+
   removeStroke(id) {
     if (!this.strokes.has(id)) return;
     this.strokes.delete(id);
@@ -186,11 +210,22 @@ export class DrawingCanvas {
     if (this.activePointerId !== null) return;
     if (e.pointerType === "touch" && this._penSeen) return; // simple palm rejection
     if (e.pointerType === "pen") this._penSeen = true;
-    this.activePointerId = e.pointerId;
-    this.activePointerType = e.pointerType;
+
     const rect = this.live.getBoundingClientRect();
     const pt = this._norm(e.clientX - rect.left, e.clientY - rect.top);
     pt.p = e.pressure > 0 ? e.pressure : 0.5;
+
+    if (this.tool === "fill") {
+      // Atomic — a tap, not a drag — so it skips the live-preview/pointer
+      // tracking entirely and commits straight away.
+      this._fillAt(this.bctx, pt, this.color);
+      this.handlers.onLocalStrokeEnd([pt], { tool: "fill", color: this.color, size: this.size });
+      e.preventDefault();
+      return;
+    }
+
+    this.activePointerId = e.pointerId;
+    this.activePointerType = e.pointerType;
     this.myPoints = [pt];
     this.myStyle = { tool: this.tool, color: this.color, size: this.size };
     try {

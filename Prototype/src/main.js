@@ -1,7 +1,7 @@
 // Boot + all the plain-UI wiring: station setup, the message-board screen
-// (prompt, note composer, trail feed), the onboarding carousel, the
+// (prompt, shared grid canvas), the onboarding carousel, the
 // press-and-hold ready button, and the duet toolbar. Game/timer/canvas
-// logic lives in game.js.
+// logic — including the grid itself — lives in game.js.
 import * as game from "./game.js";
 import { getStationFromUrl, STATIONS } from "./stations.js";
 
@@ -12,12 +12,12 @@ const els = {
   boardIcon: document.getElementById("board-icon"),
   boardLabel: document.getElementById("board-label"),
   boardPromptText: document.getElementById("board-prompt-text"),
-  noteCanvas: document.getElementById("note-canvas"),
+  boardAddBtn: document.getElementById("board-add-btn"),
+  boardGrid: document.getElementById("board-grid"),
   noteToolbar: document.getElementById("note-toolbar"),
   noteSwatches: document.getElementById("note-swatches"),
-  noteClearBtn: document.getElementById("note-clear-btn"),
-  notePostBtn: document.getElementById("note-post-btn"),
-  trailList: document.getElementById("trail-list"),
+  noteUndoBtn: document.getElementById("note-undo-btn"),
+  noteRedoBtn: document.getElementById("note-redo-btn"),
 
   // onboarding
   onboardingCards: document.getElementById("onboarding-cards"),
@@ -48,6 +48,7 @@ const els = {
   toolbar: document.getElementById("toolbar"),
   swatches: document.getElementById("swatches"),
   undoBtn: document.getElementById("undo-btn"),
+  redoBtn: document.getElementById("redo-btn"),
 
   finishCanvas: document.getElementById("finish-canvas"),
   finishCountdown: document.getElementById("finish-countdown"),
@@ -238,11 +239,37 @@ els.readyBtn.addEventListener("pointercancel", cancelHold);
 
 game.onDuetStart(resetReadyUI);
 
+// ---------- confetti (the "you're both here!" alert) ----------
+const CONFETTI_COLORS = ["#ff5a5f", "#ff9f43", "#ffd23f", "#3ddc84", "#4d96ff", "#8e5bff", "#ff8fd6"];
+
+function spawnConfetti() {
+  const host = document.getElementById("screen-alert");
+  if (!host) return;
+  const layer = document.createElement("div");
+  layer.className = "confetti-layer";
+  host.appendChild(layer);
+  for (let i = 0; i < 44; i++) {
+    const piece = document.createElement("span");
+    piece.className = "confetti-piece";
+    piece.style.setProperty("--c", CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)]);
+    piece.style.left = `${Math.random() * 100}%`;
+    piece.style.setProperty("--dx", `${(Math.random() * 2 - 1) * 160}px`);
+    piece.style.setProperty("--rot", `${Math.random() * 720 - 360}deg`);
+    piece.style.animationDelay = `${Math.random() * 350}ms`;
+    piece.style.animationDuration = `${1300 + Math.random() * 700}ms`;
+    layer.appendChild(piece);
+  }
+  setTimeout(() => layer.remove(), 2600);
+}
+
+game.onDuetStart(spawnConfetti);
+
 // ---------- duet toolbar ----------
 buildSwatches(els.swatches, (c) => game.setColor(c));
 wireToolButtons(els.toolbar, (t) => game.setTool(t));
 wireSizeButtons(els.toolbar, (s) => game.setSize(s));
 els.undoBtn.addEventListener("click", () => game.undo());
+els.redoBtn.addEventListener("click", () => game.redo());
 
 // ---------- finish screen ----------
 els.saveBtn.addEventListener("click", () => {
@@ -254,8 +281,9 @@ els.doneBtn.addEventListener("click", () => game.skipToBoard());
 buildSwatches(els.noteSwatches, (c) => game.setNoteColor(c));
 wireToolButtons(els.noteToolbar, (t) => game.setNoteTool(t));
 wireSizeButtons(els.noteToolbar, (s) => game.setNoteSize(s));
-els.noteClearBtn.addEventListener("click", () => game.clearNote());
-els.notePostBtn.addEventListener("click", () => game.postNote());
+els.noteUndoBtn.addEventListener("click", () => game.undoNote());
+els.noteRedoBtn.addEventListener("click", () => game.redoNote());
+els.boardAddBtn.addEventListener("click", () => game.addAnswer());
 
 // Any real interaction on the board screen counts as "active" — this is
 // the signal the both-active duet trigger watches for.

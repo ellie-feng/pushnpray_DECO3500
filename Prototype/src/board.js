@@ -8,6 +8,8 @@
 // gets its own small engine rather than overloading the duet one. The two
 // duplicate a little stroke-painting math, which is an acceptable tradeoff
 // for not risking the already-verified duet drawing code.
+import { floodFillPixels } from "./floodfill.js";
+
 const SIZES = { s: 4, m: 9, l: 18 };
 
 function styleFor(tool, sizeKey) {
@@ -17,10 +19,24 @@ function styleFor(tool, sizeKey) {
   return { width: base, alpha: 1, composite: "source-over", constant: false };
 }
 
+// A fill isn't a path — it's a single point plus a colour. Replaying it
+// means re-running the flood fill against whatever the canvas looks like
+// at this point in the stroke history, which reproduces the same result
+// as long as everything before it replays in order (it does — see
+// NoteComposer._redraw and renderNoteThumbnail below).
+function fillAt(ctx, point, color, w, h) {
+  const dpr = ctx.canvas.width / w;
+  floodFillPixels(ctx, ctx.canvas.width, ctx.canvas.height, point.x * w * dpr, point.y * h * dpr, color);
+}
+
 // Paints one stroke's normalized (0..1) points onto ctx, denormalized
 // against a w x h logical canvas size.
 export function paintStroke(ctx, points, tool, color, sizeKey, w, h) {
   if (!points || points.length === 0) return;
+  if (tool === "fill") {
+    fillAt(ctx, points[0], color, w, h);
+    return;
+  }
   const style = styleFor(tool, sizeKey);
   const denorm = (pt) => ({ x: pt.x * w, y: pt.y * h, p: pt.p });
   ctx.save();
@@ -59,6 +75,7 @@ export class NoteComposer {
     this.color = "#232733";
     this.size = "m";
     this.strokes = [];
+    this.redoStack = [];
     this.current = null;
     this.activePointerId = null;
     this._penSeen = false;
@@ -116,7 +133,20 @@ export class NoteComposer {
 
   clear() {
     this.strokes = [];
+    this.redoStack = [];
     this.current = null;
+    this._redraw();
+  }
+
+  undo() {
+    if (this.strokes.length === 0) return;
+    this.redoStack.push(this.strokes.pop());
+    this._redraw();
+  }
+
+  redo() {
+    if (this.redoStack.length === 0) return;
+    this.strokes.push(this.redoStack.pop());
     this._redraw();
   }
 
@@ -133,11 +163,21 @@ export class NoteComposer {
     if (this.activePointerId !== null) return;
     if (e.pointerType === "touch" && this._penSeen) return; // simple palm rejection
     if (e.pointerType === "pen") this._penSeen = true;
-    this.activePointerId = e.pointerId;
-    this.activePointerType = e.pointerType;
     const rect = this.canvas.getBoundingClientRect();
     const pt = this._norm(e.clientX - rect.left, e.clientY - rect.top);
     pt.p = e.pressure > 0 ? e.pressure : 0.5;
+
+    if (this.tool === "fill") {
+      // Atomic — a tap, not a drag.
+      this.strokes.push({ tool: "fill", color: this.color, size: this.size, points: [pt] });
+      this.redoStack = [];
+      this._redraw();
+      e.preventDefault();
+      return;
+    }
+
+    this.activePointerId = e.pointerId;
+    this.activePointerType = e.pointerType;
     this.current = { tool: this.tool, color: this.color, size: this.size, points: [pt] };
     try {
       this.canvas.setPointerCapture(e.pointerId);
@@ -167,6 +207,7 @@ export class NoteComposer {
     if (this.activePointerType === "pen") this._penSeen = false;
     if (this.current && this.current.points.length > 0) {
       this.strokes.push(this.current);
+      this.redoStack = [];
     }
     this.current = null;
     this._redraw();

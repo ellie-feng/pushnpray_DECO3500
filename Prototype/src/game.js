@@ -13,15 +13,26 @@ const ACTIVE_WINDOW_MS = 9000;
 // How long the finish/reveal screen stays up before auto-returning to the
 // board (a "Done" button can also skip this early).
 const FINISH_VIEW_MS = 10000;
+// Size of one grid cell on the shared board canvas, in CSS px.
+const CELL_W = 220;
+const CELL_H = 160;
+// How many empty cells to always keep available beyond the current
+// occupied extent, in every direction — this is what makes the board feel
+// like it keeps growing rather than being a fixed size.
+const BOARD_PAD = 2;
 
 let els = null;
 let station = null; // { id, label, icon, prompts, duetRole }
 let role = null; // "A" | "B" — fixed by station, never claimed
 let canvasEngine = null;
-let noteComposer = null;
+let boardNotes = {}; // "gx_gy" -> { strokes, t }
+let composeCell = null; // { gx, gy } this device is currently drawing into, or null
+let composeComposer = null; // NoteComposer for composeCell
+let noteToolPrefs = { tool: "pen", color: "#232733", size: "m" };
 let presence = {};
 let session = { state: "board", round: 0 };
-let myStrokeIds = [];
+let myStrokes = []; // [{id, stroke}] this device's own strokes still on the duet canvas, in order
+let myRedoStack = []; // strokes this device has undone, poppable to redo — cleared by any new stroke
 
 let currentScreenName = null;
 let currentCanDraw = false;
@@ -54,13 +65,12 @@ export async function init(domEls, stationConfig) {
       if (!points || points.length === 0) return;
       const stroke = { role, tool: style.tool, color: style.color, size: style.size, points, t: Date.now() };
       const id = rt.commitStroke(stroke);
-      myStrokeIds.push(id);
+      myStrokes.push({ id, stroke });
+      myRedoStack = []; // a new stroke invalidates any pending redo
       canvasEngine.registerOwnStroke(id, stroke);
     },
   });
   canvasEngine.setMyRole(role);
-
-  noteComposer = new NoteComposer(els.noteCanvas);
 
   rt.initPresence(role);
   session = (await rt.ensureSession()) || session;
@@ -75,7 +85,7 @@ export async function init(domEls, stationConfig) {
     (id, stroke) => canvasEngine.addStrokeIfNew(id, stroke),
     (id) => {
       canvasEngine.removeStroke(id);
-      myStrokeIds = myStrokeIds.filter((x) => x !== id);
+      myStrokes = myStrokes.filter((e) => e.id !== id);
     }
   );
   rt.watchLive("A", (data) => {
@@ -84,7 +94,12 @@ export async function init(domEls, stationConfig) {
   rt.watchLive("B", (data) => {
     if (role !== "B") canvasEngine.setRemoteLive("B", data);
   });
-  rt.watchTrail(station.id, (notes) => renderTrail(notes));
+  rt.watchTrail(station.id, (notes) => {
+    boardNotes = notes;
+    // Don't tear down a cell this device is actively drawing into just
+    // because the shared list changed elsewhere — see renderBoardGrid().
+    if (!composeCell) renderBoardGrid();
+  });
 
   setInterval(tick, 100);
   return true;
@@ -127,8 +142,18 @@ export function setSize(s) {
   canvasEngine.setSize(s);
 }
 export function undo() {
-  const id = myStrokeIds.pop();
-  if (id) rt.removeStroke(id);
+  const entry = myStrokes.pop();
+  if (!entry) return;
+  myRedoStack.push(entry);
+  rt.removeStroke(entry.id);
+}
+export function redo() {
+  const entry = myRedoStack.pop();
+  if (!entry) return;
+  const id = rt.commitStroke(entry.stroke);
+  myStrokes.push({ id, stroke: entry.stroke });
+  canvasEngine.registerOwnStroke(id, entry.stroke);
+  canvasEngine.paintStrokeDirect(entry.stroke);
 }
 export function markReady() {
   const round = typeof session.round === "number" ? session.round : 0;
@@ -142,26 +167,39 @@ export function touchActive() {
   rt.touchActive(role);
 }
 
-// ---------- message board ----------
+// ---------- message board: shared infinite canvas ----------
+// Tool prefs persist across cells (picking red pen once keeps it selected
+// for the next note too) and apply immediately to whichever cell is
+// currently being composed, if any.
 export function setNoteTool(t) {
-  noteComposer.setTool(t);
+  noteToolPrefs.tool = t;
+  if (composeComposer) composeComposer.setTool(t);
 }
 export function setNoteColor(c) {
-  noteComposer.setColor(c);
+  noteToolPrefs.color = c;
+  if (composeComposer) composeComposer.setColor(c);
 }
 export function setNoteSize(s) {
-  noteComposer.setSize(s);
+  noteToolPrefs.size = s;
+  if (composeComposer) composeComposer.setSize(s);
 }
-export function clearNote() {
-  noteComposer.clear();
+export function undoNote() {
+  if (composeComposer) composeComposer.undo();
 }
-export function noteIsEmpty() {
-  return noteComposer.isEmpty();
+export function redoNote() {
+  if (composeComposer) composeComposer.redo();
 }
-export function postNote() {
-  if (noteComposer.isEmpty()) return;
-  rt.postNote(station.id, noteComposer.exportStrokes());
-  noteComposer.clear();
+
+// HUD "+ Add" button: jumps straight to the nearest empty cell instead of
+// making people hunt for one by panning around.
+export function addAnswer() {
+  if (composeCell) return; // already composing somewhere
+  const cell = findFirstEmptyCell();
+  startCompose(cell.gx, cell.gy);
+  requestAnimationFrame(() => {
+    const el = els.boardGrid && els.boardGrid.querySelector(".board-cell.composing");
+    if (el) el.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
+  });
 }
 
 // Leaving the finish screen early instead of waiting out FINISH_VIEW_MS.
@@ -191,6 +229,13 @@ function render() {
   const state = session.state || "board";
 
   if (state !== lastServerState) {
+    if (lastServerState === "board" && state !== "board") {
+      // A duet got triggered while this device had a note half-drawn —
+      // abandon it rather than let renderBoardGrid() try to resurrect a
+      // composer bound to a canvas that's about to be torn down.
+      composeCell = null;
+      composeComposer = null;
+    }
     if (state === "board") {
       pickBoardPrompt(); // fresh prompt each time this station returns to idle
     }
@@ -199,6 +244,12 @@ function render() {
       localAlertSeen = false;
       clearTimeout(alertTimer);
       alertTimer = null;
+      // The canvas itself clears via room/strokes being removed (each
+      // removal fires the same listener undo() uses), but that doesn't
+      // touch myRedoStack — without this, "Redo" could resurrect a stroke
+      // from the round that just ended onto the fresh canvas.
+      myStrokes = [];
+      myRedoStack = [];
       onDuetStartCallbacks.forEach((cb) => cb());
       unlockAudio();
       playChime(660);
@@ -266,7 +317,7 @@ function showScreen(name) {
     canvasEngine.resize();
   }
   if (name === "board") {
-    noteComposer.resize();
+    renderBoardGrid();
   }
 }
 
@@ -297,24 +348,144 @@ function updateBoard() {
   }
 }
 
-function renderTrail(notes) {
-  if (!els.trailList) return;
-  els.trailList.innerHTML = "";
-  if (notes.length === 0) {
-    const empty = document.createElement("p");
-    empty.className = "trail-empty muted";
-    empty.textContent = "No notes here yet — be the first.";
-    els.trailList.appendChild(empty);
-    return;
+// A cell key is only ever "gx_gy" (both integers, gx/gy can be negative) —
+// written that way by this app alone. Filtering on the shape defends
+// against anything else ending up under this path corrupting the grid's
+// bounds (e.g. NaN from a malformed key poisoning a Math.min/max chain).
+const CELL_KEY_RE = /^(-?\d+)_(-?\d+)$/;
+
+function parseCellKey(key) {
+  const m = CELL_KEY_RE.exec(key);
+  return m ? { gx: Number(m[1]), gy: Number(m[2]) } : null;
+}
+
+function boardBounds() {
+  let minGX = 0;
+  let maxGX = 0;
+  let minGY = 0;
+  let maxGY = 0;
+  let any = false;
+  for (const key of Object.keys(boardNotes)) {
+    const cell = parseCellKey(key);
+    if (!cell) continue;
+    if (!any) {
+      minGX = maxGX = cell.gx;
+      minGY = maxGY = cell.gy;
+      any = true;
+    } else {
+      if (cell.gx < minGX) minGX = cell.gx;
+      if (cell.gx > maxGX) maxGX = cell.gx;
+      if (cell.gy < minGY) minGY = cell.gy;
+      if (cell.gy > maxGY) maxGY = cell.gy;
+    }
   }
-  for (const note of notes) {
-    const item = document.createElement("div");
-    item.className = "trail-item";
-    const cv = document.createElement("canvas");
-    cv.className = "trail-canvas";
-    item.appendChild(cv);
-    els.trailList.appendChild(item);
-    renderNoteThumbnail(cv, note.strokes);
+  return {
+    minGX: minGX - BOARD_PAD,
+    maxGX: maxGX + BOARD_PAD,
+    minGY: minGY - BOARD_PAD,
+    maxGY: maxGY + BOARD_PAD,
+  };
+}
+
+function findFirstEmptyCell() {
+  const { minGX, maxGX, minGY, maxGY } = boardBounds();
+  for (let gy = minGY; gy <= maxGY; gy++) {
+    for (let gx = minGX; gx <= maxGX; gx++) {
+      if (!boardNotes[`${gx}_${gy}`]) return { gx, gy };
+    }
+  }
+  // Unreachable in practice — BOARD_PAD always leaves empty cells around
+  // the occupied extent — but fall back to the origin rather than throw.
+  return { gx: 0, gy: 0 };
+}
+
+function startCompose(gx, gy) {
+  if (composeCell) return; // this device is already composing elsewhere
+  if (boardNotes[`${gx}_${gy}`]) return; // taken since the grid was drawn
+  composeCell = { gx, gy };
+  renderBoardGrid();
+}
+
+function cancelCompose() {
+  composeCell = null;
+  composeComposer = null;
+  renderBoardGrid();
+}
+
+async function postCompose() {
+  if (!composeCell || !composeComposer || composeComposer.isEmpty()) return;
+  const { gx, gy } = composeCell;
+  const strokes = composeComposer.exportStrokes();
+  composeCell = null;
+  composeComposer = null;
+  try {
+    await rt.postNote(station.id, `${gx}_${gy}`, strokes);
+  } catch {
+    // A rejected transaction (permission denied, a network blip) would
+    // otherwise skip the render below entirely, leaving a stale
+    // "composing" cell on screen with Cancel/Post buttons wired to a
+    // composer that no longer exists. Falling through to renderBoardGrid()
+    // reverts the cell to empty either way — honest, since the note
+    // wasn't actually saved.
+  }
+  // Whether this device's own transaction won the cell, someone else's did
+  // in the meantime, or it failed outright, re-render from whatever
+  // boardNotes ends up being once the watchTrail listener catches up.
+  renderBoardGrid();
+}
+
+function renderBoardGrid() {
+  if (!els.boardGrid) return;
+  if (els.noteToolbar) els.noteToolbar.classList.toggle("disabled", !composeCell);
+
+  const { minGX, maxGX, minGY, maxGY } = boardBounds();
+  const cols = maxGX - minGX + 1;
+  const rows = maxGY - minGY + 1;
+  els.boardGrid.style.gridTemplateColumns = `repeat(${cols}, ${CELL_W}px)`;
+  els.boardGrid.style.gridTemplateRows = `repeat(${rows}, ${CELL_H}px)`;
+  els.boardGrid.innerHTML = "";
+
+  for (let gy = minGY; gy <= maxGY; gy++) {
+    for (let gx = minGX; gx <= maxGX; gx++) {
+      const key = `${gx}_${gy}`;
+      const note = boardNotes[key];
+      const cell = document.createElement("div");
+      cell.className = "board-cell";
+
+      if (note) {
+        cell.classList.add("filled");
+        const cv = document.createElement("canvas");
+        cell.appendChild(cv);
+        els.boardGrid.appendChild(cell);
+        renderNoteThumbnail(cv, note.strokes);
+      } else if (composeCell && composeCell.gx === gx && composeCell.gy === gy) {
+        cell.classList.add("composing");
+        const cv = document.createElement("canvas");
+        cell.appendChild(cv);
+        const actions = document.createElement("div");
+        actions.className = "board-cell-actions";
+        const cancelBtn = document.createElement("button");
+        cancelBtn.className = "btn";
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.addEventListener("click", cancelCompose);
+        const postBtn = document.createElement("button");
+        postBtn.className = "btn btn-primary";
+        postBtn.textContent = "Post";
+        postBtn.addEventListener("click", postCompose);
+        actions.appendChild(cancelBtn);
+        actions.appendChild(postBtn);
+        cell.appendChild(actions);
+        els.boardGrid.appendChild(cell);
+        composeComposer = new NoteComposer(cv);
+        composeComposer.setTool(noteToolPrefs.tool);
+        composeComposer.setColor(noteToolPrefs.color);
+        composeComposer.setSize(noteToolPrefs.size);
+      } else {
+        cell.classList.add("empty");
+        cell.addEventListener("click", () => startCompose(gx, gy));
+        els.boardGrid.appendChild(cell);
+      }
+    }
   }
 }
 

@@ -18,10 +18,11 @@
 
   <main id="app">
 
-    <!-- MESSAGE BOARD (default state) — deliberately reuses the same
-         .hud / .play-body / .canvas-wrap / .toolbar structure as the
-         drawing-together screen below, so the "whiteboard" reads the same
-         way in both places. -->
+    <!-- MESSAGE BOARD (default state) — a shared, ever-growing canvas:
+         everyone's answers stay visible in place, and new ones can only go
+         in empty cells, never over an existing one. Reuses the same
+         .hud / .play-body / .toolbar structure as the drawing-together
+         screen below so the "whiteboard" reads the same way in both. -->
     <section id="screen-board" class="screen" data-screen="board">
       <div class="hud">
         <div class="hud-word">
@@ -32,8 +33,7 @@
           <div class="board-prompt" id="board-prompt-text">Loading&hellip;</div>
         </div>
         <div class="board-hud-actions">
-          <button class="btn" id="note-clear-btn">Clear</button>
-          <button class="btn btn-primary" id="note-post-btn">Post</button>
+          <button class="btn btn-primary" id="board-add-btn">+ Add</button>
         </div>
       </div>
 
@@ -42,6 +42,7 @@
           <button class="tool-btn active" data-tool="pen" title="Pen">✏️</button>
           <button class="tool-btn" data-tool="highlighter" title="Highlighter">🖍️</button>
           <button class="tool-btn" data-tool="eraser" title="Eraser">🧼</button>
+          <button class="tool-btn" data-tool="fill" title="Fill">🪣</button>
           <div class="toolbar-sep"></div>
           <div class="swatches" id="note-swatches"></div>
           <div class="toolbar-sep"></div>
@@ -50,14 +51,15 @@
             <button class="size-btn active" data-size="m">M</button>
             <button class="size-btn" data-size="l">L</button>
           </div>
+          <div class="toolbar-sep"></div>
+          <button class="tool-btn" id="note-undo-btn" title="Undo">↩️</button>
+          <button class="tool-btn" id="note-redo-btn" title="Redo">↪️</button>
         </div>
 
-        <div class="canvas-wrap">
-          <canvas id="note-canvas"></canvas>
+        <div class="board-viewport">
+          <div class="board-grid" id="board-grid"></div>
         </div>
       </div>
-
-      <div class="trail" id="trail-list"></div>
     </section>
 
     <!-- ALERT (both stations just became active) -->
@@ -123,6 +125,7 @@
           <button class="tool-btn active" data-tool="pen" title="Pen">✏️</button>
           <button class="tool-btn" data-tool="highlighter" title="Highlighter">🖍️</button>
           <button class="tool-btn" data-tool="eraser" title="Eraser">🧼</button>
+          <button class="tool-btn" data-tool="fill" title="Fill">🪣</button>
           <div class="toolbar-sep"></div>
           <div class="swatches" id="swatches"></div>
           <div class="toolbar-sep"></div>
@@ -133,6 +136,7 @@
           </div>
           <div class="toolbar-sep"></div>
           <button class="tool-btn" id="undo-btn" title="Undo">↩️</button>
+          <button class="tool-btn" id="redo-btn" title="Redo">↪️</button>
         </div>
 
         <div class="canvas-wrap">

@@ -15,7 +15,11 @@
 //                            client-side purely from startAt/endsAt vs now
 //   room/strokes/{id}: { role, tool, color, size, points:[{x,y,p}], t }
 //   room/live/{A|B}:   { tool, color, size, points }  (in-progress duet stroke)
-//   trails/{stationId}/notes/{id}: { strokes:[...], t }   (message-board posts)
+//   trails/{stationId}/notes/{gx_gy}: { strokes:[...], t }
+//     - a shared grid, one per station: "gx_gy" is both the note's
+//       position and its claim — posting is a transaction that aborts if
+//       the cell is already taken, so nobody can draw over an existing
+//       note, only add around it
 //
 // There's no role-claiming any more — a device's role is fixed by which
 // station it's dedicated to (see stations.js), so there's no contention to
@@ -32,9 +36,6 @@ import {
   update,
   remove,
   push,
-  query,
-  orderByChild,
-  limitToLast,
   runTransaction,
   onDisconnect,
   onChildAdded,
@@ -181,20 +182,22 @@ export function watchLive(role, cb) {
   onValue(ref(db, `room/live/${role}`), (snap) => cb(snap.val()));
 }
 
-// ---------- message-board trail ----------
-export function postNote(stationId, strokes) {
-  const noteRef = push(ref(db, `trails/${stationId}/notes`));
-  set(noteRef, { strokes, t: Date.now() });
+// ---------- message-board: shared infinite canvas ----------
+// Notes live on a grid, one per station, keyed "gx_gy" — that key doubles
+// as the claim: posting is a transaction that aborts if the cell is
+// already occupied, so two people can never draw over the same spot (they
+// can only ever add around each other). There's no per-pixel collision
+// detection — the grid cell *is* the reserved region.
+export async function postNote(stationId, cellKey, strokes) {
+  const res = await runTransaction(ref(db, `trails/${stationId}/notes/${cellKey}`), (current) => {
+    if (current) return; // already occupied -> abort
+    return { strokes, t: Date.now() };
+  });
+  return res.committed;
 }
 
-export function watchTrail(stationId, cb, max = 30) {
-  const q = query(ref(db, `trails/${stationId}/notes`), orderByChild("t"), limitToLast(max));
-  onValue(q, (snap) => {
-    const list = [];
-    snap.forEach((child) => {
-      list.push({ id: child.key, ...child.val() });
-    });
-    list.reverse(); // newest first
-    cb(list);
+export function watchTrail(stationId, cb) {
+  onValue(ref(db, `trails/${stationId}/notes`), (snap) => {
+    cb(snap.val() || {});
   });
 }
