@@ -18,33 +18,46 @@
 
   <main id="app">
 
-    <!-- MESSAGE BOARD (default state) -->
+    <!-- MESSAGE BOARD (default state) — deliberately reuses the same
+         .hud / .play-body / .canvas-wrap / .toolbar structure as the
+         drawing-together screen below, so the "whiteboard" reads the same
+         way in both places. -->
     <section id="screen-board" class="screen" data-screen="board">
-      <div class="board-wrap">
-        <div class="board-header">
-          <span class="board-icon" id="board-icon"></span>
-          <span class="board-label" id="board-label"></span>
+      <div class="hud">
+        <div class="hud-word">
+          <span class="hud-word-emoji" id="board-icon"></span>
+          <span id="board-label"></span>
         </div>
-        <p class="board-prompt" id="board-prompt-text"></p>
-
-        <div class="note-composer">
-          <canvas id="note-canvas"></canvas>
+        <div class="hud-center">
+          <div class="board-prompt" id="board-prompt-text">Loading&hellip;</div>
         </div>
-
-        <div class="note-toolbar" id="note-toolbar">
-          <button class="tool-btn active" data-tool="pen" title="Pen">✏️</button>
-          <button class="tool-btn" data-tool="highlighter" title="Highlighter">🖍️</button>
-          <button class="tool-btn" data-tool="eraser" title="Eraser">🧼</button>
-          <div class="note-swatches" id="note-swatches"></div>
-          <button class="size-btn" data-size="s">S</button>
-          <button class="size-btn active" data-size="m">M</button>
-          <button class="size-btn" data-size="l">L</button>
+        <div class="board-hud-actions">
           <button class="btn" id="note-clear-btn">Clear</button>
           <button class="btn btn-primary" id="note-post-btn">Post</button>
         </div>
-
-        <div class="trail" id="trail-list"></div>
       </div>
+
+      <div class="play-body">
+        <div class="toolbar" id="note-toolbar">
+          <button class="tool-btn active" data-tool="pen" title="Pen">✏️</button>
+          <button class="tool-btn" data-tool="highlighter" title="Highlighter">🖍️</button>
+          <button class="tool-btn" data-tool="eraser" title="Eraser">🧼</button>
+          <div class="toolbar-sep"></div>
+          <div class="swatches" id="note-swatches"></div>
+          <div class="toolbar-sep"></div>
+          <div class="sizes">
+            <button class="size-btn" data-size="s">S</button>
+            <button class="size-btn active" data-size="m">M</button>
+            <button class="size-btn" data-size="l">L</button>
+          </div>
+        </div>
+
+        <div class="canvas-wrap">
+          <canvas id="note-canvas"></canvas>
+        </div>
+      </div>
+
+      <div class="trail" id="trail-list"></div>
     </section>
 
     <!-- ALERT (both stations just became active) -->
