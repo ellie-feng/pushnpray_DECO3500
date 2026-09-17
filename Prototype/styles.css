@@ -550,14 +550,17 @@ body {
   }
 }
 
-/* ---------- message board: chronological shared gallery ----------
+/* ---------- message board: shared infinite canvas ----------
    Deliberately reuses .hud / .play-body / .toolbar from the
    drawing-together screen (below) rather than a bespoke layout — same
-   "whiteboard" treatment in both places. Answers fill the grid in the
-   order they were posted, left to right, top to bottom, inside a
-   natively-scrollable viewport (panning is just scrolling — no custom
-   gesture code); there's always exactly one open "+" cell — the next
-   spot — and everything before it is finished and read-only. */
+   "whiteboard" treatment in both places. Pan and pinch-to-zoom are fully
+   custom (touch-action: none, driven by pointer events in game.js) rather
+   than native scroll — there's no native equivalent for pinch-zooming a
+   single element, and mixing native scroll with a CSS transform for zoom
+   would mean fighting over what "the scroll position" means once zoomed.
+   Each cell is either empty (tap to claim and draw into it) or filled
+   (someone's finished note, read-only) — that's what makes it "add
+   around, not over". */
 #screen-board {
   flex-direction: column;
   align-items: stretch;
@@ -580,14 +583,20 @@ body {
   position: relative;
   flex: 1;
   background: var(--bg);
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
+  overflow: hidden;
+  touch-action: none;
 }
 .board-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
   display: grid;
   gap: 12px;
   padding: 24px;
-  align-content: start;
+  transform-origin: 0 0;
+}
+.board-grid.jumping {
+  transition: transform 0.35s ease;
 }
 .board-cell {
   position: relative;
@@ -605,33 +614,21 @@ body {
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
 }
-.board-cell.next {
-  border: 3px dashed var(--accent);
-  background: rgba(255, 255, 255, 0.5);
+.board-cell.empty {
+  border: 2px dashed var(--line);
+  background: rgba(255, 255, 255, 0.35);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.board-cell.next:active {
-  background: rgba(255, 255, 255, 0.85);
+.board-cell.empty:active {
+  background: rgba(255, 255, 255, 0.7);
 }
-.board-cell-plus {
-  font-size: 3rem;
+.board-cell.empty .board-cell-plus {
+  font-size: 2.2rem;
   font-weight: 300;
-  color: var(--accent);
-  animation: next-cell-pulse 1.8s ease-in-out infinite;
-}
-@keyframes next-cell-pulse {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 0.8;
-  }
-  50% {
-    transform: scale(1.15);
-    opacity: 1;
-  }
+  color: var(--muted);
 }
 .board-cell.composing {
   background: #fff;
