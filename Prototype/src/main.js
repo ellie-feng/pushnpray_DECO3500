@@ -15,10 +15,9 @@ const els = {
   boardIcon: document.getElementById("board-icon"),
   boardLabel: document.getElementById("board-label"),
   boardPromptText: document.getElementById("board-prompt-text"),
+  boardAddBtn: document.getElementById("board-add-btn"),
   boardViewport: document.getElementById("board-viewport"),
-  boardCanvasWrap: document.getElementById("board-canvas-wrap"),
-  boardCanvasBase: document.getElementById("board-canvas-base"),
-  boardCanvasLive: document.getElementById("board-canvas-live"),
+  boardGrid: document.getElementById("board-grid"),
   noteToolbar: document.getElementById("note-toolbar"),
   noteSwatches: document.getElementById("note-swatches"),
   noteUndoBtn: document.getElementById("note-undo-btn"),
@@ -56,10 +55,8 @@ const els = {
 
   finishCanvas: document.getElementById("finish-canvas"),
   finishCountdown: document.getElementById("finish-countdown"),
-  revealWordA: document.getElementById("reveal-word-a"),
-  revealEmojiA: document.getElementById("reveal-emoji-a"),
-  revealWordB: document.getElementById("reveal-word-b"),
-  revealEmojiB: document.getElementById("reveal-emoji-b"),
+  revealWord: document.getElementById("reveal-word"),
+  revealEmoji: document.getElementById("reveal-emoji"),
   saveBtn: document.getElementById("save-btn"),
   doneBtn: document.getElementById("done-btn"),
 
@@ -114,17 +111,17 @@ function wireSizeButtons(container, onSize) {
   });
 }
 
-// ---------- onboarding: one page, the question front and centre ----------
+// ---------- onboarding: one page, the scene front and centre ----------
 function renderOnboarding() {
-  const p = game.myPrompt();
+  const p = game.sharedPrompt();
   const icon = p ? p.emoji : "🎨";
-  const question = p ? p.word : "Loading your question&hellip;";
+  const scene = p ? p.word : "Loading your scene&hellip;";
   els.onboardingCard.innerHTML = `
     <div class="ob-icon">${icon}</div>
-    <p class="ob-eyebrow">Your question</p>
-    <h2 class="ob-question">${question}</h2>
+    <p class="ob-eyebrow">You're drawing together</p>
+    <h2 class="ob-question">${scene}</h2>
     <ul class="ob-rules">
-      <li><span class="ob-rule-icon">🎨</span>You and your partner are drawing your answers on <strong>one shared canvas</strong>, live.</li>
+      <li><span class="ob-rule-icon">🎨</span>You and your partner are drawing this scene on <strong>one shared canvas</strong>, live.</li>
       <li><span class="ob-rule-icon">⏱️</span>2:00 total, in 30-second turns — Player 1, then Player 2, back and forth.</li>
       <li><span class="ob-rule-icon">👀</span>Not your turn? Watch what they're adding — you're building one picture together.</li>
     </ul>`;
@@ -243,6 +240,7 @@ wireToolButtons(els.noteToolbar, (t) => game.setNoteTool(t));
 wireSizeButtons(els.noteToolbar, (s) => game.setNoteSize(s));
 els.noteUndoBtn.addEventListener("click", () => game.undoNote());
 els.noteRedoBtn.addEventListener("click", () => game.redoNote());
+els.boardAddBtn.addEventListener("click", () => game.addAnswer());
 
 // Any real interaction on the board screen counts as "active" — this is
 // the signal the both-active duet trigger watches for.

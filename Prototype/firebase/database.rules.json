@@ -16,7 +16,7 @@
     "trails": {
       ".read": true,
       "$station": {
-        "strokes": { ".write": true }
+        "notes": { ".write": true }
       }
     }
   }
