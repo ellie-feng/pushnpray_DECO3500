@@ -31,19 +31,17 @@
       </div>
     </section>
 
-    <!-- MESSAGE BOARD — a shared infinite canvas: everyone's answers live
-         on one big grid you can pan and pinch-zoom around, and a new one
-         can go in any empty cell — never over an existing one. Reuses the
-         same .hud / .play-body / .toolbar structure as the
-         drawing-together screen below so the "whiteboard" reads the same
-         way in both. -->
+    <!-- MESSAGE BOARD — one continuous shared whiteboard per station:
+         everyone draws directly onto it (strokes free to overlap, no
+         cells), and can pan/pinch-zoom around to see what's already there.
+         Reuses the same .hud / .play-body / .toolbar structure as the
+         drawing-together screen below so it reads the same way in both. -->
     <section id="screen-board" class="screen" data-screen="board" hidden>
       <div class="hud">
         <div class="hud-word">
           <span class="hud-word-emoji" id="board-icon"></span>
           <span id="board-label"></span>
         </div>
-        <button id="board-add-btn" class="btn btn-primary">+ Add</button>
       </div>
 
       <div class="board-prompt-banner">
@@ -70,7 +68,10 @@
         </div>
 
         <div class="board-viewport" id="board-viewport">
-          <div class="board-grid" id="board-grid"></div>
+          <div class="board-canvas-wrap" id="board-canvas-wrap">
+            <canvas id="board-canvas-base"></canvas>
+            <canvas id="board-canvas-live"></canvas>
+          </div>
         </div>
       </div>
     </section>

@@ -15,9 +15,10 @@ const els = {
   boardIcon: document.getElementById("board-icon"),
   boardLabel: document.getElementById("board-label"),
   boardPromptText: document.getElementById("board-prompt-text"),
-  boardAddBtn: document.getElementById("board-add-btn"),
   boardViewport: document.getElementById("board-viewport"),
-  boardGrid: document.getElementById("board-grid"),
+  boardCanvasWrap: document.getElementById("board-canvas-wrap"),
+  boardCanvasBase: document.getElementById("board-canvas-base"),
+  boardCanvasLive: document.getElementById("board-canvas-live"),
   noteToolbar: document.getElementById("note-toolbar"),
   noteSwatches: document.getElementById("note-swatches"),
   noteUndoBtn: document.getElementById("note-undo-btn"),
@@ -242,7 +243,6 @@ wireToolButtons(els.noteToolbar, (t) => game.setNoteTool(t));
 wireSizeButtons(els.noteToolbar, (s) => game.setNoteSize(s));
 els.noteUndoBtn.addEventListener("click", () => game.undoNote());
 els.noteRedoBtn.addEventListener("click", () => game.redoNote());
-els.boardAddBtn.addEventListener("click", () => game.addAnswer());
 
 // Any real interaction on the board screen counts as "active" — this is
 // the signal the both-active duet trigger watches for.

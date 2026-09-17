@@ -15,11 +15,11 @@
 //                            client-side purely from startAt/endsAt vs now
 //   room/strokes/{id}: { role, tool, color, size, points:[{x,y,p}], t }
 //   room/live/{A|B}:   { tool, color, size, points }  (in-progress duet stroke)
-//   trails/{stationId}/notes/{gx_gy}: { strokes:[...], t }
-//     - a shared grid, one per station: "gx_gy" is both the note's
-//       position and its claim — posting is a transaction that aborts if
-//       the cell is already taken, so nobody can draw over an existing
-//       note, only add around it
+//   trails/{stationId}/strokes/{id}: { tool, color, size, points:[{x,y,p}], t }
+//     - one continuous shared whiteboard per station: points are in an
+//       arbitrary shared "world" coordinate space (see board.js), and
+//       strokes are free to overlap — there's no claiming, anyone can draw
+//       anywhere
 //
 // There's no role-claiming any more — a device's role is fixed by which
 // station it's dedicated to (see stations.js), so there's no contention to
@@ -182,22 +182,22 @@ export function watchLive(role, cb) {
   onValue(ref(db, `room/live/${role}`), (snap) => cb(snap.val()));
 }
 
-// ---------- message-board: shared infinite canvas ----------
-// Notes live on a grid, one per station, keyed "gx_gy" — that key doubles
-// as the claim: posting is a transaction that aborts if the cell is
-// already occupied, so two people can never draw over the same spot (they
-// can only ever add around each other). There's no per-pixel collision
-// detection — the grid cell *is* the reserved region.
-export async function postNote(stationId, cellKey, strokes) {
-  const res = await runTransaction(ref(db, `trails/${stationId}/notes/${cellKey}`), (current) => {
-    if (current) return; // already occupied -> abort
-    return { strokes, t: Date.now() };
-  });
-  return res.committed;
+// ---------- message board: shared infinite whiteboard ----------
+// One flat list of strokes per station — no claiming, no per-pixel
+// collision detection, strokes are simply free to overlap, same as the
+// duet's room/strokes model above.
+export function postBoardStroke(stationId, stroke) {
+  const strokeRef = push(ref(db, `trails/${stationId}/strokes`));
+  set(strokeRef, stroke);
+  return strokeRef.key;
+}
+
+export function removeBoardStroke(stationId, id) {
+  remove(ref(db, `trails/${stationId}/strokes/${id}`));
 }
 
 export function watchTrail(stationId, cb) {
-  onValue(ref(db, `trails/${stationId}/notes`), (snap) => {
+  onValue(ref(db, `trails/${stationId}/strokes`), (snap) => {
     cb(snap.val() || {});
   });
 }
