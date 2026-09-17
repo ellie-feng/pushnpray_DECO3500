@@ -426,15 +426,15 @@ body {
 .reveal-item {
   background: var(--bg);
   border-radius: var(--radius-md);
-  padding: 16px 24px;
+  padding: 16px 32px;
 }
 .reveal-emoji {
-  font-size: 2.2rem;
+  font-size: 2.6rem;
 }
 .reveal-word {
   font-weight: 800;
-  font-size: 1.1rem;
-  max-width: 220px;
+  font-size: 1.3rem;
+  max-width: 360px;
 }
 #finish-canvas {
   max-width: 60vw;
@@ -550,7 +550,7 @@ body {
   }
 }
 
-/* ---------- message board: shared infinite whiteboard ----------
+/* ---------- message board: shared infinite canvas ----------
    Deliberately reuses .hud / .play-body / .toolbar from the
    drawing-together screen (below) rather than a bespoke layout — same
    "whiteboard" treatment in both places. Pan and pinch-to-zoom are fully
@@ -558,10 +558,9 @@ body {
    than native scroll — there's no native equivalent for pinch-zooming a
    single element, and mixing native scroll with a CSS transform for zoom
    would mean fighting over what "the scroll position" means once zoomed.
-   There's no grid of cells any more — .board-canvas-base/.board-canvas-live
-   are one continuous canvas people draw straight onto, free to overlap,
-   sized and resized in JS (see BoardCanvas in board.js) to whatever the
-   current content's bounds are. */
+   Each cell is either empty (tap to claim and draw into it) or filled
+   (someone's finished note, read-only) — that's what makes it "add
+   around, not over". */
 #screen-board {
   flex-direction: column;
   align-items: stretch;
@@ -587,25 +586,69 @@ body {
   overflow: hidden;
   touch-action: none;
 }
-.board-canvas-wrap {
+.board-grid {
   position: absolute;
   top: 0;
   left: 0;
+  display: grid;
+  gap: 12px;
+  padding: 24px;
   transform-origin: 0 0;
 }
-#board-canvas-base,
-#board-canvas-live {
-  position: absolute;
-  top: 0;
-  left: 0;
+.board-grid.jumping {
+  transition: transform 0.35s ease;
 }
-#board-canvas-base {
-  background: #fff;
+.board-cell {
+  position: relative;
   border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.board-cell canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.board-cell.filled {
+  background: #fff;
+  border: 1px solid var(--line);
   box-shadow: var(--shadow);
 }
-#board-canvas-live {
-  pointer-events: none;
+.board-cell.empty {
+  border: 2px dashed var(--line);
+  background: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.board-cell.empty:active {
+  background: rgba(255, 255, 255, 0.7);
+}
+.board-cell.empty .board-cell-plus {
+  font-size: 2.2rem;
+  font-weight: 300;
+  color: var(--muted);
+}
+.board-cell.composing {
+  background: #fff;
+  border: 2px solid var(--accent);
+  box-shadow: var(--shadow);
+}
+.board-cell.composing canvas {
+  touch-action: none;
+}
+.board-cell-actions {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+.board-cell-actions .btn {
+  padding: 6px 12px;
+  font-size: 0.8rem;
 }
 
 /* ---------- alert ---------- */

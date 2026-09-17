@@ -31,17 +31,19 @@
       </div>
     </section>
 
-    <!-- MESSAGE BOARD — one continuous shared whiteboard per station:
-         everyone draws directly onto it (strokes free to overlap, no
-         cells), and can pan/pinch-zoom around to see what's already there.
-         Reuses the same .hud / .play-body / .toolbar structure as the
-         drawing-together screen below so it reads the same way in both. -->
+    <!-- MESSAGE BOARD — a shared infinite canvas: everyone's answers live
+         on one big grid you can pan and pinch-zoom around, and a new one
+         can go in any empty cell — never over an existing one. Reuses the
+         same .hud / .play-body / .toolbar structure as the
+         drawing-together screen below so the "whiteboard" reads the same
+         way in both. -->
     <section id="screen-board" class="screen" data-screen="board" hidden>
       <div class="hud">
         <div class="hud-word">
           <span class="hud-word-emoji" id="board-icon"></span>
           <span id="board-label"></span>
         </div>
+        <button id="board-add-btn" class="btn btn-primary">+ Add</button>
       </div>
 
       <div class="board-prompt-banner">
@@ -68,10 +70,7 @@
         </div>
 
         <div class="board-viewport" id="board-viewport">
-          <div class="board-canvas-wrap" id="board-canvas-wrap">
-            <canvas id="board-canvas-base"></canvas>
-            <canvas id="board-canvas-live"></canvas>
-          </div>
+          <div class="board-grid" id="board-grid"></div>
         </div>
       </div>
     </section>
@@ -168,17 +167,11 @@
     <section id="screen-finish" class="screen" data-screen="finish" hidden>
       <div class="center-card">
         <h1>Time's up! ⏰</h1>
-        <p class="muted">You made this drawing together — here's what you were each answering:</p>
+        <p class="muted">You made this drawing together:</p>
         <div class="reveal-row">
           <div class="reveal-item">
-            <div class="reveal-emoji" id="reveal-emoji-a"></div>
-            <div class="muted">Player 1 was answering</div>
-            <div class="reveal-word" id="reveal-word-a"></div>
-          </div>
-          <div class="reveal-item">
-            <div class="reveal-emoji" id="reveal-emoji-b"></div>
-            <div class="muted">Player 2 was answering</div>
-            <div class="reveal-word" id="reveal-word-b"></div>
+            <div class="reveal-emoji" id="reveal-emoji"></div>
+            <div class="reveal-word" id="reveal-word"></div>
           </div>
         </div>
         <canvas id="finish-canvas"></canvas>
