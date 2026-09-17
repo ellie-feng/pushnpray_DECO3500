@@ -18,23 +18,34 @@
 
   <main id="app">
 
-    <!-- MESSAGE BOARD (default state) — a shared, ever-growing canvas:
-         everyone's answers stay visible in place, and new ones can only go
-         in empty cells, never over an existing one. Reuses the same
-         .hud / .play-body / .toolbar structure as the drawing-together
-         screen below so the "whiteboard" reads the same way in both. -->
-    <section id="screen-board" class="screen" data-screen="board">
+    <!-- LANDING (attract screen — shown each time this station goes idle,
+         before revealing the board itself) -->
+    <section id="screen-landing" class="screen" data-screen="landing">
+      <div class="landing-wrap">
+        <div class="landing-blob blob-1"></div>
+        <div class="landing-blob blob-2"></div>
+        <div class="landing-blob blob-3"></div>
+        <div class="landing-blob blob-4"></div>
+        <h1 class="landing-title">Share your<br>thoughts</h1>
+        <p class="landing-subtitle">tap to continue</p>
+      </div>
+    </section>
+
+    <!-- MESSAGE BOARD — one continuous shared whiteboard per station:
+         everyone draws directly onto it (strokes free to overlap, no
+         cells), and can pan/pinch-zoom around to see what's already there.
+         Reuses the same .hud / .play-body / .toolbar structure as the
+         drawing-together screen below so it reads the same way in both. -->
+    <section id="screen-board" class="screen" data-screen="board" hidden>
       <div class="hud">
         <div class="hud-word">
           <span class="hud-word-emoji" id="board-icon"></span>
           <span id="board-label"></span>
         </div>
-        <div class="hud-center">
-          <div class="board-prompt" id="board-prompt-text">Loading&hellip;</div>
-        </div>
-        <div class="board-hud-actions">
-          <button class="btn btn-primary" id="board-add-btn">+ Add</button>
-        </div>
+      </div>
+
+      <div class="board-prompt-banner">
+        <div class="board-prompt" id="board-prompt-text">Loading&hellip;</div>
       </div>
 
       <div class="play-body">
@@ -57,7 +68,10 @@
         </div>
 
         <div class="board-viewport" id="board-viewport">
-          <div class="board-grid" id="board-grid"></div>
+          <div class="board-canvas-wrap" id="board-canvas-wrap">
+            <canvas id="board-canvas-base"></canvas>
+            <canvas id="board-canvas-live"></canvas>
+          </div>
         </div>
       </div>
     </section>
@@ -65,19 +79,18 @@
     <!-- ALERT (both stations just became active) -->
     <section id="screen-alert" class="screen" data-screen="alert" hidden>
       <div class="center-card alert-card">
-        <div class="alert-icon">🎉</div>
-        <h1>You're both here!</h1>
-        <p class="muted">Time to draw something together.</p>
+        <div class="alert-icon">🍀</div>
+        <h1>It's your lucky day!</h1>
+        <p class="muted">You've both been picked for a bonus round — let's draw something together.</p>
       </div>
     </section>
 
-    <!-- ONBOARDING -->
+    <!-- ONBOARDING — one page, not a carousel: the rules plus this
+         device's own prompt, made as clear as possible, then straight to
+         the ready screen. -->
     <section id="screen-onboarding" class="screen" data-screen="onboarding" hidden>
-      <div class="card-stack" id="onboarding-cards"></div>
-      <div class="onboarding-nav">
-        <div class="dots" id="onboarding-dots"></div>
-        <button id="onboarding-next" class="btn btn-primary">Next</button>
-      </div>
+      <div class="ob-card" id="onboarding-card"></div>
+      <button id="onboarding-next" class="btn btn-primary">Let's go</button>
     </section>
 
     <!-- LOBBY / READY -->
@@ -155,16 +168,16 @@
     <section id="screen-finish" class="screen" data-screen="finish" hidden>
       <div class="center-card">
         <h1>Time's up! ⏰</h1>
-        <p class="muted">You made this drawing together — here's the word each of you had:</p>
+        <p class="muted">You made this drawing together — here's what you were each answering:</p>
         <div class="reveal-row">
           <div class="reveal-item">
             <div class="reveal-emoji" id="reveal-emoji-a"></div>
-            <div class="muted">Player 1's word</div>
+            <div class="muted">Player 1 was answering</div>
             <div class="reveal-word" id="reveal-word-a"></div>
           </div>
           <div class="reveal-item">
             <div class="reveal-emoji" id="reveal-emoji-b"></div>
-            <div class="muted">Player 2's word</div>
+            <div class="muted">Player 2 was answering</div>
             <div class="reveal-word" id="reveal-word-b"></div>
           </div>
         </div>

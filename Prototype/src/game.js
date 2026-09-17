@@ -4,7 +4,7 @@
 // logic and all the screen/HUD updates that follow from it.
 import * as rt from "./realtime.js";
 import { DrawingCanvas } from "./canvas.js";
-import { NoteComposer, renderNoteThumbnail } from "./board.js";
+import { BoardCanvas } from "./board.js";
 
 const TURN_MS = 30000;
 // How fresh a heartbeat must be to count as "someone is using this station
@@ -13,22 +13,25 @@ const ACTIVE_WINDOW_MS = 9000;
 // How long the finish/reveal screen stays up before auto-returning to the
 // board (a "Done" button can also skip this early).
 const FINISH_VIEW_MS = 10000;
-// Size of one grid cell on the shared board canvas, in CSS px.
-const CELL_W = 220;
-const CELL_H = 160;
-// How many empty cells to always keep available beyond the current
-// occupied extent, in every direction — this is what makes the board feel
-// like it keeps growing rather than being a fixed size.
-const BOARD_PAD = 2;
+const MIN_ZOOM = 0.4;
+const MAX_ZOOM = 2.5;
 
 let els = null;
 let station = null; // { id, label, icon, prompts, duetRole }
 let role = null; // "A" | "B" — fixed by station, never claimed
 let canvasEngine = null;
-let boardNotes = {}; // "gx_gy" -> { strokes, t }
-let composeCell = null; // { gx, gy } this device is currently drawing into, or null
-let composeComposer = null; // NoteComposer for composeCell
-let noteToolPrefs = { tool: "pen", color: "#232733", size: "m" };
+let boardCanvasEngine = null; // BoardCanvas — this station's shared whiteboard
+let myBoardStrokes = []; // [{id, stroke}] this device's own board strokes, in order — for undo
+let boardRedoStack = []; // strokes this device has undone, poppable to redo — cleared by any new stroke
+
+// ---- board pan/zoom (fully custom — not native scroll — see the pointer
+// handlers set up in init() for why) ----
+let panX = 0;
+let panY = 0;
+let zoom = 1;
+const trackedPointers = new Map(); // pointerId -> {x, y}, in client coords — touch only; pen/mouse draws instead, see onViewportPointerDown
+let pinchStartDist = 0;
+let pinchStartZoom = 1;
 let presence = {};
 let session = { state: "board", round: 0 };
 let myStrokes = []; // [{id, stroke}] this device's own strokes still on the duet canvas, in order
@@ -37,6 +40,7 @@ let myRedoStack = []; // strokes this device has undone, poppable to redo — cl
 let currentScreenName = null;
 let currentCanDraw = false;
 let lastServerState = null; // for detecting session.state edges (board -> lobby, etc.)
+let localLandingSeen = false; // per visit: has this device tapped past the landing splash yet
 let localOnboardingSeen = false; // per-round: has this device clicked through onboarding yet
 let alertTimer = null;
 let localAlertSeen = false;
@@ -49,7 +53,7 @@ let bannerTimeout = null;
 let audioCtx = null;
 let onDuetStartCallbacks = [];
 let boardPrompt = "";
-let boardViewCentered = false; // per visit: has the view been scrolled to existing content yet
+let boardScrolled = false; // per visit: has the view been scrolled to existing content yet
 let trailLoaded = false; // has watchTrail delivered its first real snapshot yet
 
 export async function init(domEls, stationConfig) {
@@ -96,13 +100,38 @@ export async function init(domEls, stationConfig) {
   rt.watchLive("B", (data) => {
     if (role !== "B") canvasEngine.setRemoteLive("B", data);
   });
-  rt.watchTrail(station.id, (notes) => {
-    boardNotes = notes;
-    trailLoaded = true;
-    // Don't tear down a cell this device is actively drawing into just
-    // because the shared list changed elsewhere — see renderBoardGrid().
-    if (!composeCell) renderBoardGrid();
+  boardCanvasEngine = new BoardCanvas({
+    base: els.boardCanvasBase,
+    live: els.boardCanvasLive,
+    wrap: els.boardCanvasWrap,
+    viewport: els.boardViewport,
+    getTransform: () => ({ panX, panY, zoom }),
+    onLocalStrokeEnd: (stroke) => {
+      const id = rt.postBoardStroke(station.id, stroke);
+      boardCanvasEngine.registerLocalStroke(id, stroke, shiftBoardPan);
+      myBoardStrokes.push({ id, stroke });
+      boardRedoStack = []; // a new stroke invalidates any pending redo
+    },
   });
+
+  rt.watchTrail(station.id, (strokes) => {
+    boardCanvasEngine.setStrokes(strokes, shiftBoardPan);
+    trailLoaded = true;
+    maybeCenterBoardView();
+  });
+
+  // Pan/zoom is fully custom rather than native scroll: pinch-to-zoom has
+  // no native equivalent for a single element, and mixing native scroll
+  // (for pan) with a CSS transform (for zoom) means fighting over what
+  // "the scroll position" even means once zoomed. touch-action:none on the
+  // viewport (see styles.css) hands ALL gesture handling to these. Only
+  // touch pointers reach these handlers — pen/mouse are drawing input,
+  // handled entirely inside BoardCanvas (also listening on this same
+  // viewport element, see its constructor).
+  els.boardViewport.addEventListener("pointerdown", onViewportPointerDown);
+  els.boardViewport.addEventListener("pointermove", onViewportPointerMove);
+  els.boardViewport.addEventListener("pointerup", onViewportPointerUp);
+  els.boardViewport.addEventListener("pointercancel", onViewportPointerUp);
 
   setInterval(tick, 100);
   return true;
@@ -170,39 +199,44 @@ export function touchActive() {
   rt.touchActive(role);
 }
 
-// ---------- message board: shared infinite canvas ----------
-// Tool prefs persist across cells (picking red pen once keeps it selected
-// for the next note too) and apply immediately to whichever cell is
-// currently being composed, if any.
+// ---------- message board: shared infinite whiteboard ----------
 export function setNoteTool(t) {
-  noteToolPrefs.tool = t;
-  if (composeComposer) composeComposer.setTool(t);
+  boardCanvasEngine.setTool(t);
 }
 export function setNoteColor(c) {
-  noteToolPrefs.color = c;
-  if (composeComposer) composeComposer.setColor(c);
+  boardCanvasEngine.setColor(c);
 }
 export function setNoteSize(s) {
-  noteToolPrefs.size = s;
-  if (composeComposer) composeComposer.setSize(s);
+  boardCanvasEngine.setSize(s);
 }
+// Undo/redo only ever act on this device's own strokes, most-recent-first —
+// nobody can undo someone else's drawing.
 export function undoNote() {
-  if (composeComposer) composeComposer.undo();
+  const entry = myBoardStrokes.pop();
+  if (!entry) return;
+  boardRedoStack.push(entry);
+  rt.removeBoardStroke(station.id, entry.id);
 }
 export function redoNote() {
-  if (composeComposer) composeComposer.redo();
+  const entry = boardRedoStack.pop();
+  if (!entry) return;
+  const id = rt.postBoardStroke(station.id, entry.stroke);
+  boardCanvasEngine.registerLocalStroke(id, entry.stroke, shiftBoardPan);
+  myBoardStrokes.push({ id, stroke: entry.stroke });
 }
 
-// HUD "+ Add" button: jumps straight to the nearest empty cell instead of
-// making people hunt for one by panning around.
-export function addAnswer() {
-  if (composeCell) return; // already composing somewhere
-  const cell = findFirstEmptyCell();
-  startCompose(cell.gx, cell.gy);
-  requestAnimationFrame(() => {
-    const el = els.boardGrid && els.boardGrid.querySelector(".board-cell.composing");
-    if (el) el.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
-  });
+// Keeps existing content pinned on screen when the board canvas's local
+// origin moves — see BoardCanvas.setStrokes/registerLocalStroke in board.js.
+function shiftBoardPan(dx, dy) {
+  panX += dx * zoom;
+  panY += dy * zoom;
+  applyTransform();
+}
+
+// Called when the landing splash is tapped — reveals the board itself for
+// the rest of this visit.
+export function confirmLanding() {
+  localLandingSeen = true;
 }
 
 // Leaving the finish screen early instead of waiting out FINISH_VIEW_MS.
@@ -232,16 +266,10 @@ function render() {
   const state = session.state || "board";
 
   if (state !== lastServerState) {
-    if (lastServerState === "board" && state !== "board") {
-      // A duet got triggered while this device had a note half-drawn —
-      // abandon it rather than let renderBoardGrid() try to resurrect a
-      // composer bound to a canvas that's about to be torn down.
-      composeCell = null;
-      composeComposer = null;
-    }
     if (state === "board") {
       pickBoardPrompt(); // fresh prompt each time this station returns to idle
-      boardViewCentered = false; // re-center on what's already there, once, per visit
+      boardScrolled = false; // re-center on what's already there, once, per visit
+      localLandingSeen = false; // show the attract splash again for the next visitor
     }
     if (state === "lobby") {
       localOnboardingSeen = false;
@@ -265,8 +293,12 @@ function render() {
     finishShown = false;
     lastTurnRole = null;
     lastTickSecond = null;
+    updateBoard(); // both-active trigger check runs regardless of the landing splash
+    if (!localLandingSeen) {
+      showScreen("landing");
+      return;
+    }
     showScreen("board");
-    updateBoard();
     return;
   }
 
@@ -321,8 +353,32 @@ function showScreen(name) {
     canvasEngine.resize();
   }
   if (name === "board") {
-    renderBoardGrid();
+    maybeCenterBoardView();
   }
+}
+
+// Centres the view on whatever's already been drawn, once per visit (not on
+// every update — that would yank the view around while someone's actually
+// browsing), gated on trailLoaded so it never fires against an empty
+// placeholder just before the real content arrives a moment later.
+function maybeCenterBoardView() {
+  if (!boardCanvasEngine) return;
+  if (!boardScrolled && trailLoaded) {
+    boardScrolled = true;
+    centerBoardView();
+  }
+  applyTransform();
+}
+
+function centerBoardView() {
+  if (!els.boardViewport) return;
+  const center = boardCanvasEngine.getContentCenter();
+  const b = boardCanvasEngine.bounds;
+  zoom = 1;
+  const vpW = els.boardViewport.clientWidth || 940;
+  const vpH = els.boardViewport.clientHeight || 600;
+  panX = vpW / 2 - (center.x - b.minX) * zoom;
+  panY = vpH / 2 - (center.y - b.minY) * zoom;
 }
 
 // Internal role identifiers stay "A"/"B" (the data model, room keys, etc.) —
@@ -352,180 +408,74 @@ function updateBoard() {
   }
 }
 
-// A cell key is only ever "gx_gy" (both integers, gx/gy can be negative) —
-// written that way by this app alone. Filtering on the shape defends
-// against anything else ending up under this path corrupting the grid's
-// bounds (e.g. NaN from a malformed key poisoning a Math.min/max chain).
-const CELL_KEY_RE = /^(-?\d+)_(-?\d+)$/;
-
-function parseCellKey(key) {
-  const m = CELL_KEY_RE.exec(key);
-  return m ? { gx: Number(m[1]), gy: Number(m[2]) } : null;
-}
-
-// The actual occupied extent, unpadded — null bounds (all zero, any:false)
-// if the board has no notes yet.
-function occupiedExtent() {
-  let minGX = 0;
-  let maxGX = 0;
-  let minGY = 0;
-  let maxGY = 0;
-  let any = false;
-  for (const key of Object.keys(boardNotes)) {
-    const cell = parseCellKey(key);
-    if (!cell) continue;
-    if (!any) {
-      minGX = maxGX = cell.gx;
-      minGY = maxGY = cell.gy;
-      any = true;
-    } else {
-      if (cell.gx < minGX) minGX = cell.gx;
-      if (cell.gx > maxGX) maxGX = cell.gx;
-      if (cell.gy < minGY) minGY = cell.gy;
-      if (cell.gy > maxGY) maxGY = cell.gy;
-    }
-  }
-  return { minGX, maxGX, minGY, maxGY, any };
-}
-
-function boardBounds() {
-  const e = occupiedExtent();
-  return {
-    minGX: e.minGX - BOARD_PAD,
-    maxGX: e.maxGX + BOARD_PAD,
-    minGY: e.minGY - BOARD_PAD,
-    maxGY: e.maxGY + BOARD_PAD,
-  };
-}
-
-function findFirstEmptyCell() {
-  const { minGX, maxGX, minGY, maxGY } = boardBounds();
-  for (let gy = minGY; gy <= maxGY; gy++) {
-    for (let gx = minGX; gx <= maxGX; gx++) {
-      if (!boardNotes[`${gx}_${gy}`]) return { gx, gy };
-    }
-  }
-  // Unreachable in practice — BOARD_PAD always leaves empty cells around
-  // the occupied extent — but fall back to the origin rather than throw.
-  return { gx: 0, gy: 0 };
-}
-
-function startCompose(gx, gy) {
-  if (composeCell) return; // this device is already composing elsewhere
-  if (boardNotes[`${gx}_${gy}`]) return; // taken since the grid was drawn
-  composeCell = { gx, gy };
-  renderBoardGrid();
-}
-
-function cancelCompose() {
-  composeCell = null;
-  composeComposer = null;
-  renderBoardGrid();
-}
-
-async function postCompose() {
-  if (!composeCell || !composeComposer || composeComposer.isEmpty()) return;
-  const { gx, gy } = composeCell;
-  const strokes = composeComposer.exportStrokes();
-  composeCell = null;
-  composeComposer = null;
-  try {
-    await rt.postNote(station.id, `${gx}_${gy}`, strokes);
-  } catch {
-    // A rejected transaction (permission denied, a network blip) would
-    // otherwise skip the render below entirely, leaving a stale
-    // "composing" cell on screen with Cancel/Post buttons wired to a
-    // composer that no longer exists. Falling through to renderBoardGrid()
-    // reverts the cell to empty either way — honest, since the note
-    // wasn't actually saved.
-  }
-  // Whether this device's own transaction won the cell, someone else's did
-  // in the meantime, or it failed outright, re-render from whatever
-  // boardNotes ends up being once the watchTrail listener catches up.
-  renderBoardGrid();
-}
-
-function renderBoardGrid() {
-  if (!els.boardGrid) return;
-  if (els.noteToolbar) els.noteToolbar.classList.toggle("disabled", !composeCell);
-
-  const { minGX, maxGX, minGY, maxGY } = boardBounds();
-  const cols = maxGX - minGX + 1;
-  const rows = maxGY - minGY + 1;
-  els.boardGrid.style.gridTemplateColumns = `repeat(${cols}, ${CELL_W}px)`;
-  els.boardGrid.style.gridTemplateRows = `repeat(${rows}, ${CELL_H}px)`;
-  els.boardGrid.innerHTML = "";
-
-  for (let gy = minGY; gy <= maxGY; gy++) {
-    for (let gx = minGX; gx <= maxGX; gx++) {
-      const key = `${gx}_${gy}`;
-      const note = boardNotes[key];
-      const cell = document.createElement("div");
-      cell.className = "board-cell";
-
-      if (note) {
-        cell.classList.add("filled");
-        const cv = document.createElement("canvas");
-        cell.appendChild(cv);
-        els.boardGrid.appendChild(cell);
-        renderNoteThumbnail(cv, note.strokes);
-      } else if (composeCell && composeCell.gx === gx && composeCell.gy === gy) {
-        cell.classList.add("composing");
-        const cv = document.createElement("canvas");
-        cell.appendChild(cv);
-        const actions = document.createElement("div");
-        actions.className = "board-cell-actions";
-        const cancelBtn = document.createElement("button");
-        cancelBtn.className = "btn";
-        cancelBtn.textContent = "Cancel";
-        cancelBtn.addEventListener("click", cancelCompose);
-        const postBtn = document.createElement("button");
-        postBtn.className = "btn btn-primary";
-        postBtn.textContent = "Post";
-        postBtn.addEventListener("click", postCompose);
-        actions.appendChild(cancelBtn);
-        actions.appendChild(postBtn);
-        cell.appendChild(actions);
-        els.boardGrid.appendChild(cell);
-        composeComposer = new NoteComposer(cv);
-        composeComposer.setTool(noteToolPrefs.tool);
-        composeComposer.setColor(noteToolPrefs.color);
-        composeComposer.setSize(noteToolPrefs.size);
-      } else {
-        cell.classList.add("empty");
-        cell.addEventListener("click", () => startCompose(gx, gy));
-        els.boardGrid.appendChild(cell);
-      }
-    }
-  }
-
-  // Show people what's already there before nudging them to add their own:
-  // once per visit to the board (not on every update — that would yank the
-  // scroll position around while someone's actually browsing), scroll to
-  // whatever's already been posted instead of defaulting to the top-left
-  // corner of the padded (mostly empty) bounds. Gated on trailLoaded, not
-  // just "haven't centered yet" — the very first call here can happen
-  // before watchTrail's first snapshot arrives, and centering on that
-  // empty, wrong-shaped placeholder would burn the one shot before the
-  // real content (and its real bounds) shows up moments later.
-  if (!boardViewCentered && trailLoaded) {
-    boardViewCentered = true;
-    centerBoardView(minGX, minGY);
+function applyTransform() {
+  if (els.boardCanvasWrap) {
+    els.boardCanvasWrap.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
   }
 }
 
-function centerBoardView(minGX, minGY) {
-  if (!els.boardViewport) return;
-  const extent = occupiedExtent();
-  const targetGX = extent.any ? (extent.minGX + extent.maxGX) / 2 : 0;
-  const targetGY = extent.any ? (extent.minGY + extent.maxGY) / 2 : 0;
-  const gap = 12; // must match .board-grid's CSS gap
-  const pad = 24; // must match .board-grid's CSS padding
-  const targetPxX = pad + (targetGX - minGX) * (CELL_W + gap) + CELL_W / 2;
-  const targetPxY = pad + (targetGY - minGY) * (CELL_H + gap) + CELL_H / 2;
-  const vp = els.boardViewport;
-  vp.scrollLeft = Math.max(0, targetPxX - vp.clientWidth / 2);
-  vp.scrollTop = Math.max(0, targetPxY - vp.clientHeight / 2);
+function clampZoom(z) {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+}
+
+function pointerDistance(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+// Rescales around a fixed on-screen point (the pinch midpoint) rather than
+// the origin, so the content under your fingers stays under your fingers
+// as you pinch — the same way every other pinch-zoom surface behaves.
+function applyZoomAnchored(newZoom, midClient) {
+  const vpRect = els.boardViewport.getBoundingClientRect();
+  const mx = midClient.x - vpRect.left;
+  const my = midClient.y - vpRect.top;
+  const contentX = (mx - panX) / zoom;
+  const contentY = (my - panY) / zoom;
+  zoom = newZoom;
+  panX = mx - contentX * zoom;
+  panY = my - contentY * zoom;
+  applyTransform();
+}
+
+function onViewportPointerDown(e) {
+  // Only touch pans/pinch-zooms the view — pen/mouse is drawing input,
+  // handled entirely by BoardCanvas's own listeners on this same element.
+  if (e.pointerType !== "touch") return;
+  trackedPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (trackedPointers.size === 2) {
+    const pts = [...trackedPointers.values()];
+    pinchStartDist = pointerDistance(pts[0], pts[1]) || 1;
+    pinchStartZoom = zoom;
+  }
+}
+
+function onViewportPointerMove(e) {
+  if (!trackedPointers.has(e.pointerId)) return;
+  const prev = trackedPointers.get(e.pointerId);
+  const curr = { x: e.clientX, y: e.clientY };
+  trackedPointers.set(e.pointerId, curr);
+  const pts = [...trackedPointers.values()];
+
+  if (pts.length === 2) {
+    e.preventDefault();
+    const dist = pointerDistance(pts[0], pts[1]) || 1;
+    const newZoom = clampZoom(pinchStartZoom * (dist / pinchStartDist));
+    const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    applyZoomAnchored(newZoom, mid);
+  } else if (pts.length === 1) {
+    e.preventDefault();
+    panX += curr.x - prev.x;
+    panY += curr.y - prev.y;
+    applyTransform();
+  }
+}
+
+function onViewportPointerUp(e) {
+  if (!trackedPointers.has(e.pointerId)) return;
+  trackedPointers.delete(e.pointerId);
+  if (trackedPointers.size < 2) {
+    pinchStartDist = 0; // ends the pinch; a lone remaining pointer just resumes as a pan
+  }
 }
 
 function setPill(el, p, round) {
