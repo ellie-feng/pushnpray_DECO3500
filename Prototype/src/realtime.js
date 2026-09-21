@@ -6,7 +6,9 @@
 //     - lastActive = last heartbeat timestamp while on the board screen
 //       (used to detect "someone is actually using this station right now")
 //   room/session: { state, round, boardSince, startAt, endsAt,
-//                    prompts:{A,B}, emojis:{A,B} }
+//                    prompt, emoji }
+//     - prompt/emoji: one shared scene both players draw together, known to
+//       both from the start (not a secret word each answers alone)
 //     - state "board"    -> default message-board mode, everyone idle
 //     - state "lobby"    -> a duet round has been triggered; onboarding +
 //                           hold-to-ready happen client-side during this
@@ -42,7 +44,7 @@ import {
   onChildRemoved,
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { pickTwoDistinct } from "./prompts.js";
+import { pickOne } from "./prompts.js";
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
@@ -100,21 +102,22 @@ export async function ensureSession() {
   return res.snapshot.val();
 }
 
-// board -> lobby: picks fresh prompts and starts a new round, but only once
-// the cooldown since the last round has elapsed. Safe to call from both
-// devices at once — the transaction ensures only one call actually takes
-// effect, and it silently no-ops (not an error) if conditions aren't met.
+// board -> lobby: picks a fresh shared scene and starts a new round, but
+// only once the cooldown since the last round has elapsed. Safe to call
+// from both devices at once — the transaction ensures only one call
+// actually takes effect, and it silently no-ops (not an error) if
+// conditions aren't met.
 export async function tryTriggerDuet() {
   await runTransaction(ref(db, "room/session"), (current) => {
     if (!current || current.state !== "board") return; // abort: not idle
     const boardSince = current.boardSince || 0;
     if (serverNow() - boardSince < BOARD_COOLDOWN_MS) return; // abort: still cooling down
-    const [pa, pb] = pickTwoDistinct();
+    const p = pickOne();
     return {
       state: "lobby",
       round: (current.round || 0) + 1,
-      prompts: { A: pa.word, B: pb.word },
-      emojis: { A: pa.emoji, B: pb.emoji },
+      prompt: p.word,
+      emoji: p.emoji,
     };
   });
 }
