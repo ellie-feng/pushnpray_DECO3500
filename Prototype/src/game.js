@@ -5,6 +5,7 @@
 import * as rt from "./realtime.js";
 import { DrawingCanvas } from "./canvas.js";
 import { NoteComposer, renderNoteThumbnail } from "./board.js";
+import { confirmDialog, showToast } from "./ui.js";
 
 const TURN_MS = 30000;
 // How fresh a heartbeat must be to count as "someone is using this station
@@ -16,8 +17,8 @@ const FINISH_VIEW_MS = 10000;
 // Size of one grid cell on the shared board canvas, in CSS px — must match
 // the .board-grid gap/padding values in styles.css (checked at the one
 // place that does the pixel math, see panToGridCell()).
-const CELL_W = 220;
-const CELL_H = 160;
+const CELL_W = 320;
+const CELL_H = 240;
 const GRID_GAP = 12;
 const GRID_PAD = 24;
 // How many empty cells to always keep available beyond the current
@@ -26,6 +27,20 @@ const GRID_PAD = 24;
 const BOARD_PAD = 2;
 const MIN_ZOOM = 0.4;
 const MAX_ZOOM = 2.5;
+// A drawing is hidden from the grid once it has been reported this many
+// times (the data stays put; only its rendering changes).
+const REPORT_HIDE_AT = 3;
+// The compliment drawer opens for the last stretch of the duet.
+const COMPLIMENT_WINDOW_MS = 30000;
+// Pre-loaded on purpose: no typing, nothing that can be abused.
+export const COMPLIMENTS = [
+  "Nice one! 👏",
+  "Love it! ❤️",
+  "So creative! 🎨",
+  "You're a star! ⭐",
+  "Great teamwork! 🤝",
+  "That's hilarious 😂",
+];
 
 let els = null;
 let station = null; // { id, label, icon, prompts, duetRole }
@@ -34,6 +49,7 @@ let canvasEngine = null;
 let boardNotes = {}; // "gx_gy" -> { strokes, t }
 let composeCell = null; // { gx, gy } this device is currently drawing into, or null
 let composeComposer = null; // NoteComposer for composeCell
+let composeSubmitting = false; // true while this device's own post is in flight
 let noteToolPrefs = { tool: "pen", color: "#232733", size: "m" };
 
 // ---- board pan/zoom (fully custom — not native scroll — see the pointer
@@ -41,10 +57,10 @@ let noteToolPrefs = { tool: "pen", color: "#232733", size: "m" };
 let panX = 0;
 let panY = 0;
 let zoom = 1;
-const trackedPointers = new Map(); // pointerId -> {x, y}, in client coords — excludes any pointer that started inside an actively-composing cell, which handles its own drawing input
+const trackedPointers = new Map(); // pointerId -> {x, y}, in client coords
 let pinchStartDist = 0;
 let pinchStartZoom = 1;
-let jumpTimer = null;
+let panTravel = 0; // px dragged since the last pointer-down, so a drag that ends over a cell isn't also treated as a tap on it
 let presence = {};
 let session = { state: "board", round: 0 };
 let myStrokes = []; // [{id, stroke}] this device's own strokes still on the duet canvas, in order
@@ -65,6 +81,11 @@ let returnRequested = false;
 let bannerTimeout = null;
 let audioCtx = null;
 let onDuetStartCallbacks = [];
+let onPromptChangeCallbacks = [];
+let lastPromptKey = null;
+let lastComplimentT = null; // t of the latest partner compliment already shown
+let lastComplimentSentAt = 0;
+let complimentBubbleTimeout = null;
 let boardPrompt = "";
 let boardScrolled = false; // per visit: has the view been scrolled to existing content yet
 let trailLoaded = false; // has watchTrail delivered its first real snapshot yet
@@ -118,9 +139,14 @@ export async function init(domEls, stationConfig) {
   rt.watchTrail(station.id, (notes) => {
     boardNotes = notes;
     trailLoaded = true;
-    // Don't tear down a cell this device is actively drawing into just
-    // because the shared list changed elsewhere — see renderBoardGrid().
-    if (!composeCell) renderBoardGrid();
+    // Someone else filled the very cell this device is drawing into. (Not
+    // when it's our own submit landing — Firebase reports that write to
+    // this listener before the post's promise resolves.)
+    if (composeCell && !composeSubmitting && boardNotes[cellKeyOf(composeCell.gx, composeCell.gy)]) {
+      closeCompose();
+      showToast("Someone just filled that spot — pick another one!");
+    }
+    renderBoardGrid();
   });
 
   // Pan/zoom is fully custom rather than native scroll: pinch-to-zoom has
@@ -157,6 +183,23 @@ export function sharedPrompt() {
 // to run whenever a fresh duet round starts.
 export function onDuetStart(cb) {
   onDuetStartCallbacks.push(cb);
+}
+
+// Fires whenever the round's shared scene changes (including the very first
+// time it appears). The onboarding card re-renders from this rather than
+// once at the start of the round: the device that triggers a round briefly
+// sees its own optimistic local prompt before Firebase settles on the one
+// that actually won the transaction, and the card must end up showing the
+// same scene as the HUD.
+export function onPromptChange(cb) {
+  onPromptChangeCallbacks.push(cb);
+}
+
+// Backing out of a round (from matchmaking or mid-game). The duet needs both
+// players, so this ends the round for both and sends them back to the board;
+// the partner is told why (see the leftBy handling in render()).
+export function leaveRound() {
+  return rt.returnToBoard(role);
 }
 
 // Called by main.js when the "Let's go" button on the last onboarding card
@@ -228,9 +271,54 @@ export function redoNote() {
 export function addAnswer() {
   if (composeCell) return; // already composing somewhere
   const cell = findFirstEmptyCell();
-  startCompose(cell.gx, cell.gy);
   const { minGX, minGY } = boardBounds();
-  panToGridCell(cell.gx, cell.gy, minGX, minGY, true);
+  panToGridCell(cell.gx, cell.gy, minGX, minGY);
+  const el = els.boardGrid.querySelector(`[data-key="${cellKeyOf(cell.gx, cell.gy)}"]`);
+  startCompose(cell.gx, cell.gy, el ? el.getBoundingClientRect() : null);
+}
+
+// Compose overlay buttons (wired in main.js).
+export async function requestExitCompose() {
+  if (!composeCell || composeSubmitting) return;
+  if (composeComposer && !composeComposer.isEmpty()) {
+    const ok = await confirmDialog({
+      title: "Discard this drawing?",
+      message: "It hasn't been submitted yet.",
+      confirmLabel: "Discard",
+      cancelLabel: "Keep drawing",
+      danger: true,
+    });
+    if (!ok) return;
+  }
+  closeCompose();
+}
+
+export async function submitCompose() {
+  if (!composeCell || !composeComposer || composeComposer.isEmpty() || composeSubmitting) return;
+  const { gx, gy } = composeCell;
+  const strokes = composeComposer.exportStrokes();
+  composeSubmitting = true;
+  updateComposeSubmit();
+  let ok = false;
+  try {
+    ok = await rt.postNote(station.id, cellKeyOf(gx, gy), strokes);
+  } catch {
+    ok = false; // a rejected write (permissions, network blip) counts as "not saved"
+  }
+  closeCompose();
+  if (!ok) showToast("Couldn't save your drawing — that spot may have just been taken. Try another!");
+  renderBoardGrid();
+}
+
+// Pre-loaded compliments for the last 30 seconds of the duet.
+export function sendCompliment(text) {
+  const now = performance.now();
+  if (now - lastComplimentSentAt < 1500) return; // no spamming
+  lastComplimentSentAt = now;
+  const round = typeof session.round === "number" ? session.round : 0;
+  rt.sendCompliment(role, round, text);
+  els.complimentDock.classList.remove("open");
+  flashBanner(`Sent: ${text}`);
 }
 
 // Called when the landing splash is tapped — reveals the board itself for
@@ -265,15 +353,23 @@ function render() {
   const now = rt.serverNow();
   const state = session.state || "board";
 
+  const promptKey = `${session.round}|${session.prompt || ""}`;
+  if (promptKey !== lastPromptKey) {
+    lastPromptKey = promptKey;
+    onPromptChangeCallbacks.forEach((cb) => cb());
+  }
+
   if (state !== lastServerState) {
     if (lastServerState === "board" && state !== "board") {
       // A duet got triggered while this device had a note half-drawn —
-      // abandon it rather than let renderBoardGrid() try to resurrect a
-      // composer bound to a canvas that's about to be torn down.
-      composeCell = null;
-      composeComposer = null;
+      // abandon it (the full-screen overlay would otherwise still be open
+      // underneath the board when this station returns to it).
+      closeCompose();
     }
     if (state === "board") {
+      if (lastServerState && lastServerState !== "board" && session.leftBy && session.leftBy !== role) {
+        showToast("Your partner left the round — back to the board.");
+      }
       pickBoardPrompt(); // fresh prompt each time this station returns to idle
       boardScrolled = false; // re-center on what's already there, once, per visit
       localLandingSeen = false; // show the attract splash again for the next visitor
@@ -456,44 +552,103 @@ function findFirstEmptyCell() {
   return { gx: 0, gy: 0 };
 }
 
-function startCompose(gx, gy) {
+function cellKeyOf(gx, gy) {
+  return `${gx}_${gy}`;
+}
+
+// Tapping an empty cell opens it as a full-screen overlay (the drawing tools
+// live there) rather than drawing inside the small grid cell. originRect is
+// the tapped cell's on-screen rect, used only to animate the cell "growing"
+// into the overlay.
+function startCompose(gx, gy, originRect) {
   if (composeCell) return; // this device is already composing elsewhere
-  if (boardNotes[`${gx}_${gy}`]) return; // taken since the grid was drawn
+  if (boardNotes[cellKeyOf(gx, gy)]) return; // taken since the grid was drawn
   composeCell = { gx, gy };
-  renderBoardGrid();
+  composeSubmitting = false;
+  els.composeTitle.textContent = boardPrompt;
+  els.composeOverlay.hidden = false;
+  layoutComposeCard();
+  composeComposer = new NoteComposer(els.composeCanvas, updateComposeSubmit);
+  composeComposer.setTool(noteToolPrefs.tool);
+  composeComposer.setColor(noteToolPrefs.color);
+  composeComposer.setSize(noteToolPrefs.size);
+  updateComposeSubmit();
+  window.addEventListener("resize", onComposeResize);
+  animateComposeOpen(originRect);
 }
 
-function cancelCompose() {
-  composeCell = null;
+function closeCompose() {
+  window.removeEventListener("resize", onComposeResize);
+  if (composeComposer) composeComposer.destroy();
   composeComposer = null;
-  renderBoardGrid();
+  composeCell = null;
+  composeSubmitting = false;
+  if (els.composeOverlay) els.composeOverlay.hidden = true;
 }
 
-async function postCompose() {
-  if (!composeCell || !composeComposer || composeComposer.isEmpty()) return;
-  const { gx, gy } = composeCell;
-  const strokes = composeComposer.exportStrokes();
-  composeCell = null;
-  composeComposer = null;
-  try {
-    await rt.postNote(station.id, `${gx}_${gy}`, strokes);
-  } catch {
-    // A rejected transaction (permission denied, a network blip) would
-    // otherwise skip the render below entirely, leaving a stale
-    // "composing" cell on screen with Cancel/Post buttons wired to a
-    // composer that no longer exists. Falling through to renderBoardGrid()
-    // reverts the cell to empty either way — honest, since the note
-    // wasn't actually saved.
+function updateComposeSubmit() {
+  els.composeSubmit.disabled = !composeComposer || composeComposer.isEmpty() || composeSubmitting;
+}
+
+function onComposeResize() {
+  layoutComposeCard();
+  if (composeComposer) composeComposer.resize();
+}
+
+// The drawing is stored as strokes normalized to the canvas's own size, so
+// the enlarged canvas must keep the grid cell's aspect ratio or the drawing
+// would stretch when it's shown back in the grid. Fit the biggest such
+// rectangle into the stage (16px padding each side, see .compose-stage).
+function layoutComposeCard() {
+  const availW = els.composeStage.clientWidth - 32;
+  const availH = els.composeStage.clientHeight - 32;
+  const ratio = CELL_W / CELL_H;
+  const w = Math.max(160, Math.min(availW, availH * ratio));
+  els.composeCard.style.width = `${w}px`;
+  els.composeCard.style.height = `${w / ratio}px`;
+}
+
+function animateComposeOpen(originRect) {
+  const card = els.composeCard;
+  if (!card.animate) return;
+  const to = card.getBoundingClientRect();
+  let from = "scale(0.9)";
+  if (originRect && originRect.width && to.width) {
+    const sc = originRect.width / to.width;
+    const dx = originRect.left + originRect.width / 2 - (to.left + to.width / 2);
+    const dy = originRect.top + originRect.height / 2 - (to.top + to.height / 2);
+    from = `translate(${dx}px, ${dy}px) scale(${sc})`;
   }
-  // Whether this device's own transaction won the cell, someone else's did
-  // in the meantime, or it failed outright, re-render from whatever
-  // boardNotes ends up being once the watchTrail listener catches up.
-  renderBoardGrid();
+  card.animate([{ transform: from, opacity: 0.6 }, { transform: "none", opacity: 1 }], {
+    duration: 260,
+    easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+  });
+}
+
+// Pans/pinches end with a pointer-up that can land on a cell; that shouldn't
+// count as tapping the cell.
+function wasPan() {
+  return panTravel > 8;
+}
+
+async function reportCell(key) {
+  const ok = await confirmDialog({
+    title: "Report this drawing?",
+    message: `Flag it if it contains profanity or anything inappropriate. Drawings are hidden once they've been reported ${REPORT_HIDE_AT} times.`,
+    confirmLabel: "Report",
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    await rt.reportNote(station.id, key);
+    showToast("Thanks — we've flagged this drawing.");
+  } catch {
+    showToast("Couldn't send your report — please try again.");
+  }
 }
 
 function renderBoardGrid() {
   if (!els.boardGrid) return;
-  if (els.noteToolbar) els.noteToolbar.classList.toggle("disabled", !composeCell);
 
   const { minGX, maxGX, minGY, maxGY } = boardBounds();
   // The grid's local (0,0) is (minGX, minGY) — CSS Grid needs *some* fixed
@@ -516,46 +671,45 @@ function renderBoardGrid() {
 
   for (let gy = minGY; gy <= maxGY; gy++) {
     for (let gx = minGX; gx <= maxGX; gx++) {
-      const key = `${gx}_${gy}`;
+      const key = cellKeyOf(gx, gy);
       const note = boardNotes[key];
       const cell = document.createElement("div");
       cell.className = "board-cell";
+      cell.dataset.key = key;
 
       if (note) {
-        cell.classList.add("filled");
-        const cv = document.createElement("canvas");
-        cell.appendChild(cv);
-        els.boardGrid.appendChild(cell);
-        renderNoteThumbnail(cv, note.strokes);
-      } else if (composeCell && composeCell.gx === gx && composeCell.gy === gy) {
-        cell.classList.add("composing");
-        const cv = document.createElement("canvas");
-        cell.appendChild(cv);
-        const actions = document.createElement("div");
-        actions.className = "board-cell-actions";
-        const cancelBtn = document.createElement("button");
-        cancelBtn.className = "btn";
-        cancelBtn.textContent = "Cancel";
-        cancelBtn.addEventListener("click", cancelCompose);
-        const postBtn = document.createElement("button");
-        postBtn.className = "btn btn-primary";
-        postBtn.textContent = "Post";
-        postBtn.addEventListener("click", postCompose);
-        actions.appendChild(cancelBtn);
-        actions.appendChild(postBtn);
-        cell.appendChild(actions);
-        els.boardGrid.appendChild(cell);
-        composeComposer = new NoteComposer(cv);
-        composeComposer.setTool(noteToolPrefs.tool);
-        composeComposer.setColor(noteToolPrefs.color);
-        composeComposer.setSize(noteToolPrefs.size);
+        const reports = typeof note.reports === "number" ? note.reports : 0;
+        if (reports >= REPORT_HIDE_AT) {
+          cell.classList.add("reported");
+          cell.innerHTML = '<div class="reported-icon">🚫</div><div>Hidden after community reports</div>';
+          els.boardGrid.appendChild(cell);
+        } else {
+          cell.classList.add("filled");
+          const cv = document.createElement("canvas");
+          cell.appendChild(cv);
+          els.boardGrid.appendChild(cell);
+          renderNoteThumbnail(cv, note.strokes);
+          const reportBtn = document.createElement("button");
+          reportBtn.className = "report-btn";
+          reportBtn.textContent = "⚑ Report";
+          reportBtn.title = "Report this drawing";
+          reportBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (wasPan()) return;
+            reportCell(key);
+          });
+          cell.appendChild(reportBtn);
+        }
       } else {
         cell.classList.add("empty");
         const plus = document.createElement("span");
         plus.className = "board-cell-plus";
         plus.textContent = "+";
         cell.appendChild(plus);
-        cell.addEventListener("click", () => startCompose(gx, gy));
+        cell.addEventListener("click", () => {
+          if (wasPan()) return;
+          startCompose(gx, gy, cell.getBoundingClientRect());
+        });
         els.boardGrid.appendChild(cell);
       }
     }
@@ -582,7 +736,7 @@ function centerBoardView(minGX, minGY) {
   const targetGX = extent.any ? (extent.minGX + extent.maxGX) / 2 : 0;
   const targetGY = extent.any ? (extent.minGY + extent.maxGY) / 2 : 0;
   zoom = 1;
-  panToGridCell(targetGX, targetGY, minGX, minGY, false);
+  panToGridCell(targetGX, targetGY, minGX, minGY);
 }
 
 // Pans (and, on the first-ever placement, resets zoom) so that grid
@@ -591,7 +745,7 @@ function centerBoardView(minGX, minGY) {
 // used — ends up centered in the viewport. Used both for "show me what's
 // already here" on landing and for the "+ Add" button jumping to an empty
 // cell.
-function panToGridCell(targetGX, targetGY, boundsMinGX, boundsMinGY, animate) {
+function panToGridCell(targetGX, targetGY, boundsMinGX, boundsMinGY) {
   if (!els.boardViewport) return;
   const contentX = GRID_PAD + (targetGX - boundsMinGX) * (CELL_W + GRID_GAP) + CELL_W / 2;
   const contentY = GRID_PAD + (targetGY - boundsMinGY) * (CELL_H + GRID_GAP) + CELL_H / 2;
@@ -599,11 +753,6 @@ function panToGridCell(targetGX, targetGY, boundsMinGX, boundsMinGY, animate) {
   const vpH = els.boardViewport.clientHeight || 600;
   panX = vpW / 2 - contentX * zoom;
   panY = vpH / 2 - contentY * zoom;
-  if (animate && els.boardGrid) {
-    els.boardGrid.classList.add("jumping");
-    clearTimeout(jumpTimer);
-    jumpTimer = setTimeout(() => els.boardGrid.classList.remove("jumping"), 360);
-  }
   applyTransform();
 }
 
@@ -637,11 +786,7 @@ function applyZoomAnchored(newZoom, midClient) {
 }
 
 function onViewportPointerDown(e) {
-  // A pointer that starts inside an actively-composing cell belongs to
-  // NoteComposer's own drawing handlers, not to panning/zooming the board
-  // around it — leave it alone entirely.
-  if (e.target.closest(".board-cell.composing")) return;
-  els.boardGrid && els.boardGrid.classList.remove("jumping");
+  if (trackedPointers.size === 0) panTravel = 0;
   trackedPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (trackedPointers.size === 2) {
     const pts = [...trackedPointers.values()];
@@ -662,9 +807,11 @@ function onViewportPointerMove(e) {
     const dist = pointerDistance(pts[0], pts[1]) || 1;
     const newZoom = clampZoom(pinchStartZoom * (dist / pinchStartDist));
     const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    panTravel = Infinity;
     applyZoomAnchored(newZoom, mid);
   } else if (pts.length === 1) {
     e.preventDefault();
+    panTravel += Math.abs(curr.x - prev.x) + Math.abs(curr.y - prev.y);
     panX += curr.x - prev.x;
     panY += curr.y - prev.y;
     applyTransform();
@@ -722,8 +869,6 @@ function updatePlay(now) {
   els.hudTotal.textContent = fmt(totalLeft);
   els.hudWordText.textContent = session.prompt || "";
   els.hudEmoji.textContent = session.emoji || "";
-  if (els.hudDotA) els.hudDotA.classList.toggle("gone", !presence.A);
-  if (els.hudDotB) els.hudDotB.classList.toggle("gone", !presence.B);
 
   if (solo) {
     els.hudTurn.textContent = "It's all you now";
@@ -758,6 +903,38 @@ function updatePlay(now) {
     lastTickSecond = turnSec;
     playChime(880);
   }
+
+  updateCompliments(now, totalLeft, solo);
+}
+
+// The compliment drawer is only there for the final stretch, and only while
+// there's actually a partner to send to. Incoming ones come in through the
+// partner's presence node (see realtime.sendCompliment).
+function updateCompliments(now, totalLeft, solo) {
+  const open = totalLeft <= COMPLIMENT_WINDOW_MS && !solo;
+  els.complimentDock.hidden = !open;
+  if (!open) els.complimentDock.classList.remove("open");
+
+  const other = role === "A" ? "B" : "A";
+  const c = presence[other] && presence[other].compliment;
+  if (c && c.round === session.round && c.t !== lastComplimentT && now - c.t < 10000) {
+    lastComplimentT = c.t;
+    showCompliment(c.text, roleName(other));
+  }
+}
+
+function showCompliment(text, from) {
+  const el = els.complimentBubble;
+  el.textContent = `💌 ${from}: ${text}`;
+  el.hidden = false;
+  el.classList.remove("show"); // restart the pop-in if one is already showing
+  void el.offsetWidth;
+  el.classList.add("show");
+  clearTimeout(complimentBubbleTimeout);
+  complimentBubbleTimeout = setTimeout(() => {
+    el.hidden = true;
+  }, 4200);
+  playChime(784);
 }
 
 function updateFinish(now) {

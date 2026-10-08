@@ -33,10 +33,9 @@
 
     <!-- MESSAGE BOARD — a shared infinite canvas: everyone's answers live
          on one big grid you can pan and pinch-zoom around, and a new one
-         can go in any empty cell — never over an existing one. Reuses the
-         same .hud / .play-body / .toolbar structure as the
-         drawing-together screen below so the "whiteboard" reads the same
-         way in both. -->
+         can go in any empty cell — never over an existing one. Tapping an
+         empty cell opens it full-screen (see #compose-overlay) with the
+         drawing tools; the grid itself is just for browsing. -->
     <section id="screen-board" class="screen" data-screen="board" hidden>
       <div class="hud">
         <div class="hud-word">
@@ -51,11 +50,28 @@
       </div>
 
       <div class="play-body">
-        <div class="toolbar" id="note-toolbar">
-          <button class="tool-btn active" data-tool="pen" title="Pen">✏️</button>
-          <button class="tool-btn" data-tool="highlighter" title="Highlighter">🖍️</button>
-          <button class="tool-btn" data-tool="eraser" title="Eraser">🧼</button>
-          <button class="tool-btn" data-tool="fill" title="Fill">🪣</button>
+        <div class="board-viewport" id="board-viewport">
+          <div class="board-grid" id="board-grid"></div>
+        </div>
+      </div>
+
+      <!-- COMPOSE — the tapped cell, enlarged to (almost) the whole screen -->
+      <div class="compose-overlay" id="compose-overlay" hidden>
+        <div class="compose-bar">
+          <button id="compose-exit" class="btn">✕ Exit</button>
+          <div class="compose-title" id="compose-title"></div>
+          <button id="compose-submit" class="btn btn-primary" disabled>Submit</button>
+        </div>
+        <div class="compose-body">
+          <div class="toolbar" id="note-toolbar">
+          <div class="tool-grid">
+            <div class="tool"><button class="tool-btn active" data-tool="pen" title="Pen">✏️</button><span class="tool-label">Draw</span></div>
+            <div class="tool"><button class="tool-btn" data-tool="highlighter" title="Crayon / highlighter">🖍️</button><span class="tool-label">Highlight</span></div>
+            <div class="tool"><button class="tool-btn" data-tool="eraser" title="Eraser">🧼</button><span class="tool-label">Erase</span></div>
+            <div class="tool"><button class="tool-btn" data-tool="fill" title="Fill">🪣</button><span class="tool-label">Fill</span></div>
+            <div class="tool"><button class="tool-btn" id="note-undo-btn" title="Undo">↩️</button><span class="tool-label">Undo</span></div>
+            <div class="tool"><button class="tool-btn" id="note-redo-btn" title="Redo">↪️</button><span class="tool-label">Redo</span></div>
+          </div>
           <div class="toolbar-sep"></div>
           <div class="swatches" id="note-swatches"></div>
           <div class="toolbar-sep"></div>
@@ -64,19 +80,19 @@
             <button class="size-btn active" data-size="m">M</button>
             <button class="size-btn" data-size="l">L</button>
           </div>
-          <div class="toolbar-sep"></div>
-          <button class="tool-btn" id="note-undo-btn" title="Undo">↩️</button>
-          <button class="tool-btn" id="note-redo-btn" title="Redo">↪️</button>
         </div>
-
-        <div class="board-viewport" id="board-viewport">
-          <div class="board-grid" id="board-grid"></div>
+          <div class="compose-stage" id="compose-stage">
+            <div class="compose-card" id="compose-card">
+              <canvas id="compose-canvas"></canvas>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
     <!-- ALERT (both stations just became active) -->
     <section id="screen-alert" class="screen" data-screen="alert" hidden>
+      <button class="btn leave-btn" data-leave>← Back to board</button>
       <div class="center-card alert-card">
         <div class="alert-icon">🍀</div>
         <h1>It's your lucky day!</h1>
@@ -84,16 +100,18 @@
       </div>
     </section>
 
-    <!-- ONBOARDING — one page, not a carousel: the rules plus this
-         device's own prompt, made as clear as possible, then straight to
-         the ready screen. -->
+    <!-- ONBOARDING — one page, not a carousel: the rules plus the shared
+         scene both players will draw, made as clear as possible, then
+         straight to the ready screen. -->
     <section id="screen-onboarding" class="screen" data-screen="onboarding" hidden>
+      <button class="btn leave-btn" data-leave>← Back to board</button>
       <div class="ob-card" id="onboarding-card"></div>
       <button id="onboarding-next" class="btn btn-primary">Let's go</button>
     </section>
 
     <!-- LOBBY / READY -->
     <section id="screen-lobby" class="screen" data-screen="lobby" hidden>
+      <button class="btn leave-btn" data-leave>← Back to board</button>
       <div class="lobby-wrap">
         <div class="presence-row">
           <div class="presence-pill gone" id="pill-you"><span class="dot"></span>You</div>
@@ -112,6 +130,7 @@
 
     <!-- COUNTDOWN -->
     <section id="screen-countdown" class="screen" data-screen="countdown" hidden>
+      <button class="btn leave-btn" data-leave>← Back to board</button>
       <div class="countdown-number" id="countdown-number">3</div>
     </section>
 
@@ -126,29 +145,27 @@
           <div class="hud-total" id="hud-total">2:00</div>
           <div class="hud-turn" id="hud-turn"></div>
         </div>
-        <div class="hud-presence">
-          <span class="dot" id="hud-dot-a"></span>
-          <span class="dot" id="hud-dot-b"></span>
-        </div>
+        <button id="exit-btn" class="btn exit-btn">✕ Exit</button>
       </div>
 
       <div class="play-body">
         <div class="toolbar" id="toolbar">
-          <button class="tool-btn active" data-tool="pen" title="Pen">✏️</button>
-          <button class="tool-btn" data-tool="highlighter" title="Highlighter">🖍️</button>
-          <button class="tool-btn" data-tool="eraser" title="Eraser">🧼</button>
-          <button class="tool-btn" data-tool="fill" title="Fill">🪣</button>
+          <div class="tool-grid">
+            <div class="tool"><button class="tool-btn active" data-tool="pen" title="Pen">✏️</button><span class="tool-label">Draw</span></div>
+            <div class="tool"><button class="tool-btn" data-tool="highlighter" title="Crayon / highlighter">🖍️</button><span class="tool-label">Highlight</span></div>
+            <div class="tool"><button class="tool-btn" data-tool="eraser" title="Eraser">🧼</button><span class="tool-label">Erase</span></div>
+            <div class="tool"><button class="tool-btn" data-tool="fill" title="Fill">🪣</button><span class="tool-label">Fill</span></div>
+            <div class="tool"><button class="tool-btn" id="undo-btn" title="Undo">↩️</button><span class="tool-label">Undo</span></div>
+            <div class="tool"><button class="tool-btn" id="redo-btn" title="Redo">↪️</button><span class="tool-label">Redo</span></div>
+          </div>
           <div class="toolbar-sep"></div>
           <div class="swatches" id="swatches"></div>
           <div class="toolbar-sep"></div>
-          <div class="sizes" id="sizes">
+          <div class="sizes">
             <button class="size-btn" data-size="s">S</button>
             <button class="size-btn active" data-size="m">M</button>
             <button class="size-btn" data-size="l">L</button>
           </div>
-          <div class="toolbar-sep"></div>
-          <button class="tool-btn" id="undo-btn" title="Undo">↩️</button>
-          <button class="tool-btn" id="redo-btn" title="Redo">↪️</button>
         </div>
 
         <div class="canvas-wrap">
@@ -158,6 +175,13 @@
           <div class="lock-scrim" id="lock-scrim" hidden>
             <div class="lock-icon">🔒</div>
             <div id="lock-text">Watching</div>
+          </div>
+
+          <!-- Final 30 seconds only: pre-loaded compliments to send your partner -->
+          <div class="compliment-bubble" id="compliment-bubble" hidden></div>
+          <div class="compliment-dock" id="compliment-dock" hidden>
+            <div class="compliment-list" id="compliment-list"></div>
+            <button id="compliment-toggle" class="btn btn-primary compliment-toggle">💌 Send a compliment</button>
           </div>
         </div>
       </div>
@@ -191,6 +215,19 @@
         <ul class="setup-list" id="setup-list"></ul>
       </div>
     </section>
+
+    <!-- Shared helpers (see src/ui.js) -->
+    <div class="toast" id="toast" hidden></div>
+    <div class="dialog-backdrop" id="dialog" hidden>
+      <div class="dialog-card" role="dialog" aria-modal="true">
+        <h2 id="dialog-title"></h2>
+        <p class="muted" id="dialog-message"></p>
+        <div class="dialog-actions">
+          <button class="btn" id="dialog-cancel">Cancel</button>
+          <button class="btn btn-primary" id="dialog-confirm">Confirm</button>
+        </div>
+      </div>
+    </div>
 
   </main>
 

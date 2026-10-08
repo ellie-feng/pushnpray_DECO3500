@@ -4,6 +4,7 @@
 // logic — including the grid itself — lives in game.js.
 import * as game from "./game.js";
 import { getStationFromUrl, STATIONS } from "./stations.js";
+import { confirmDialog } from "./ui.js";
 
 const els = {
   screens: document.querySelectorAll(".screen"),
@@ -16,6 +17,13 @@ const els = {
   boardLabel: document.getElementById("board-label"),
   boardPromptText: document.getElementById("board-prompt-text"),
   boardAddBtn: document.getElementById("board-add-btn"),
+  composeOverlay: document.getElementById("compose-overlay"),
+  composeTitle: document.getElementById("compose-title"),
+  composeStage: document.getElementById("compose-stage"),
+  composeCard: document.getElementById("compose-card"),
+  composeCanvas: document.getElementById("compose-canvas"),
+  composeExit: document.getElementById("compose-exit"),
+  composeSubmit: document.getElementById("compose-submit"),
   boardViewport: document.getElementById("board-viewport"),
   boardGrid: document.getElementById("board-grid"),
   noteToolbar: document.getElementById("note-toolbar"),
@@ -40,8 +48,11 @@ const els = {
   hudEmoji: document.getElementById("hud-emoji"),
   hudTotal: document.getElementById("hud-total"),
   hudTurn: document.getElementById("hud-turn"),
-  hudDotA: document.getElementById("hud-dot-a"),
-  hudDotB: document.getElementById("hud-dot-b"),
+  exitBtn: document.getElementById("exit-btn"),
+  complimentDock: document.getElementById("compliment-dock"),
+  complimentList: document.getElementById("compliment-list"),
+  complimentToggle: document.getElementById("compliment-toggle"),
+  complimentBubble: document.getElementById("compliment-bubble"),
 
   canvasBase: document.getElementById("canvas-base"),
   canvasLive: document.getElementById("canvas-live"),
@@ -111,6 +122,24 @@ function wireSizeButtons(container, onSize) {
   });
 }
 
+// ---------- leaving a round ----------
+// From the matchmaking screens (alert / onboarding / lobby / countdown) it's
+// a single tap; mid-game it asks first, since it ends the round for the
+// partner too.
+document.querySelectorAll("[data-leave]").forEach((btn) => {
+  btn.addEventListener("click", () => game.leaveRound());
+});
+els.exitBtn.addEventListener("click", async () => {
+  const ok = await confirmDialog({
+    title: "Leave the round?",
+    message: "This ends the drawing for your partner too, and you'll both go back to the board.",
+    confirmLabel: "Leave",
+    cancelLabel: "Keep drawing",
+    danger: true,
+  });
+  if (ok) game.leaveRound();
+});
+
 // ---------- onboarding: one page, the scene front and centre ----------
 function renderOnboarding() {
   const p = game.sharedPrompt();
@@ -121,9 +150,10 @@ function renderOnboarding() {
     <p class="ob-eyebrow">You're drawing together</p>
     <h2 class="ob-question">${scene}</h2>
     <ul class="ob-rules">
-      <li><span class="ob-rule-icon">🎨</span>You and your partner are drawing this scene on <strong>one shared canvas</strong>, live.</li>
-      <li><span class="ob-rule-icon">⏱️</span>2:00 total, in 30-second turns — Player 1, then Player 2, back and forth.</li>
-      <li><span class="ob-rule-icon">👀</span>Not your turn? Watch what they're adding — you're building one picture together.</li>
+      <li><span class="ob-rule-icon">🎨</span><span>You and your partner are drawing this scene on <strong>one shared canvas</strong>, live.</span></li>
+      <li><span class="ob-rule-icon">⏱️</span><span>2:00 total, in 30-second turns — Player 1, then Player 2, back and forth.</span></li>
+      <li><span class="ob-rule-icon">👀</span><span>Not your turn? Watch what they're adding — you're building one picture together.</span></li>
+      <li><span class="ob-rule-icon">💌</span><span>In the final 30 seconds, you can send each other a compliment.</span></li>
     </ul>`;
 }
 
@@ -131,7 +161,9 @@ els.onboardingNext.addEventListener("click", () => {
   game.confirmOnboarding();
 });
 
-game.onDuetStart(renderOnboarding);
+// Re-rendered whenever the round's scene changes, not just once when the
+// round starts, so it can never disagree with the HUD (see game.onPromptChange).
+game.onPromptChange(renderOnboarding);
 
 // ---------- press-and-hold ready ----------
 const HOLD_MS = 1300;
@@ -228,6 +260,19 @@ wireSizeButtons(els.toolbar, (s) => game.setSize(s));
 els.undoBtn.addEventListener("click", () => game.undo());
 els.redoBtn.addEventListener("click", () => game.redo());
 
+// ---------- compliments (final 30 seconds) ----------
+game.COMPLIMENTS.forEach((text) => {
+  const chip = document.createElement("button");
+  chip.className = "btn compliment-chip";
+  chip.textContent = text;
+  chip.addEventListener("click", () => game.sendCompliment(text));
+  els.complimentList.appendChild(chip);
+});
+els.complimentToggle.addEventListener("click", () => {
+  game.unlockAudio();
+  els.complimentDock.classList.toggle("open");
+});
+
 // ---------- finish screen ----------
 els.saveBtn.addEventListener("click", () => {
   window.open(game.getFinishDataUrl(), "_blank");
@@ -241,6 +286,8 @@ wireSizeButtons(els.noteToolbar, (s) => game.setNoteSize(s));
 els.noteUndoBtn.addEventListener("click", () => game.undoNote());
 els.noteRedoBtn.addEventListener("click", () => game.redoNote());
 els.boardAddBtn.addEventListener("click", () => game.addAnswer());
+els.composeExit.addEventListener("click", () => game.requestExitCompose());
+els.composeSubmit.addEventListener("click", () => game.submitCompose());
 
 // Any real interaction on the board screen counts as "active" — this is
 // the signal the both-active duet trigger watches for.
