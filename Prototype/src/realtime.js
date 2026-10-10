@@ -6,7 +6,10 @@
 //     - lastActive = last heartbeat timestamp while on the board screen
 //       (used to detect "someone is actually using this station right now")
 //   room/session: { state, round, boardSince, startAt, endsAt,
-//                    prompt, emoji }
+//                    prompt, emoji, token }
+//     - token: random per round; with `round` it forms the id of the shared
+//       copy of the finished drawing (see shares/ below), so both devices
+//       agree on one unguessable link without talking to each other
 //     - prompt/emoji: one shared scene both players draw together, known to
 //       both from the start (not a secret word each answers alone)
 //     - state "board"    -> default message-board mode, everyone idle
@@ -17,7 +20,12 @@
 //                            client-side purely from startAt/endsAt vs now
 //   room/strokes/{id}: { role, tool, color, size, points:[{x,y,p}], t }
 //   room/live/{A|B}:   { tool, color, size, points }  (in-progress duet stroke)
-//   trails/{stationId}/notes/{gx_gy}: { strokes:[...], t }
+//   room/presence/{A|B}/compliment: { text, round, t }  (latest one sent)
+//   trails/{stationId}/notes/{gx_gy}: { strokes:[...], t, reports? }
+//   shares/{round}_{token}: { img, prompt, emoji, t }
+//     - a JPEG data URL of a finished duet drawing, which the finish screen's
+//       QR code links to (share.html). Write-once and readable only by exact
+//       id (no listing) — see firebase/database.rules.json
 //     - a shared grid, one per station: "gx_gy" is both the note's
 //       position and its claim — posting is a transaction that aborts if
 //       the cell is already taken, so nobody can draw over an existing
@@ -33,6 +41,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import {
   getDatabase,
   ref,
+  get,
   onValue,
   set,
   update,
@@ -54,6 +63,11 @@ const db = getDatabase(app);
 // re-triggering a new duet while the pair is still standing there right
 // after the last one ended.
 const BOARD_COOLDOWN_MS = 12000;
+
+function randomToken() {
+  const bytes = crypto.getRandomValues(new Uint8Array(6));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 // ---------- server-synced clock ----------
 let serverOffset = 0;
@@ -118,6 +132,7 @@ export async function tryTriggerDuet() {
       round: (current.round || 0) + 1,
       prompt: p.word,
       emoji: p.emoji,
+      token: randomToken(),
     };
   });
 }
@@ -138,11 +153,16 @@ export async function tryStartCountdown() {
   });
 }
 
-// Back to the message board once the finish screen has had its moment.
-export async function returnToBoard() {
+// Back to the message board once the finish screen has had its moment — or
+// early, if someone backs out. `leftBy` (a role) is recorded on a back-out so
+// the other device can tell its partner left rather than the round simply
+// ending; it's cleared by the next round's trigger replacing the session.
+export async function returnToBoard(leftBy) {
   await runTransaction(ref(db, "room/session"), (current) => {
     if (!current || current.state === "board") return; // nothing to do
-    return { state: "board", round: current.round, boardSince: serverNow() };
+    const next = { state: "board", round: current.round, boardSince: serverNow() };
+    if (leftBy) next.leftBy = leftBy;
+    return next;
   });
   await remove(ref(db, "room/strokes"));
   await remove(ref(db, "room/live/A"));
@@ -172,6 +192,42 @@ export function watchStrokes(onAdd, onRemove) {
   onChildRemoved(strokesRef, (snap) => onRemove(snap.key));
 }
 
+// ---------- shared copies of finished drawings ----------
+const SHARE_ROOT = "shares";
+
+// Saves a finished drawing under `id` and resolves true once a copy exists.
+// Both devices call this with the same id at the end of a round; the rules
+// make shares write-once, so the second write is rejected — which is fine,
+// as long as the first one landed, hence the follow-up read.
+export async function uploadShare(id, payload) {
+  try {
+    await set(ref(db, `${SHARE_ROOT}/${id}`), payload);
+    return true;
+  } catch {
+    try {
+      return (await fetchShare(id)) != null;
+    } catch {
+      return false;
+    }
+  }
+}
+
+export async function fetchShare(id) {
+  const snap = await get(ref(db, `${SHARE_ROOT}/${id}`));
+  return snap.val();
+}
+
+// ---------- duet compliments ----------
+// Rides on the sender's own presence node (already writable, already watched
+// by both devices) rather than a new path: a single "latest compliment" slot
+// is all the feature needs, and it's tagged with the round so a leftover one
+// from an earlier round is never mistaken for a new message.
+export function sendCompliment(role, round, text) {
+  return update(ref(db, `room/presence/${role}`), {
+    compliment: { text, round, t: serverNow() },
+  });
+}
+
 // ---------- duet in-progress stroke preview ----------
 export function publishLive(role, data) {
   set(ref(db, `room/live/${role}`), data);
@@ -197,6 +253,16 @@ export async function postNote(stationId, cellKey, strokes) {
     return { strokes, t: Date.now() };
   });
   return res.committed;
+}
+
+// Adds one report to a note. Stored as a counter on the note itself (under
+// the already-writable notes/ path) and only ever called for notes that
+// exist — creating the counter on an empty cell would make the cell look
+// occupied to postNote's transaction.
+export async function reportNote(stationId, cellKey) {
+  await runTransaction(ref(db, `trails/${stationId}/notes/${cellKey}/reports`), (current) => {
+    return (typeof current === "number" ? current : 0) + 1;
+  });
 }
 
 export function watchTrail(stationId, cb) {

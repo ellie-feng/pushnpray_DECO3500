@@ -68,8 +68,11 @@ export function paintStroke(ctx, points, tool, color, sizeKey, w, h) {
 }
 
 export class NoteComposer {
-  constructor(canvasEl) {
+  // onChange: optional, called whenever the set of strokes changes (drawn,
+  // undone, redone, filled) so the caller can e.g. enable a Submit button.
+  constructor(canvasEl, onChange) {
     this.canvas = canvasEl;
+    this.onChange = onChange || (() => {});
     this.ctx = canvasEl.getContext("2d");
     this.tool = "pen";
     this.color = "#232733";
@@ -81,15 +84,30 @@ export class NoteComposer {
     this._penSeen = false;
 
     this._resize = this._resize.bind(this);
+    this._onOrient = () => setTimeout(this._resize, 200);
     window.addEventListener("resize", this._resize);
-    window.addEventListener("orientationchange", () => setTimeout(this._resize, 200));
+    window.addEventListener("orientationchange", this._onOrient);
     this._resize();
 
+    this._down = (e) => this._onDown(e);
+    this._move = (e) => this._onMove(e);
+    this._up = (e) => this._onUp(e);
     this.canvas.style.touchAction = "none";
-    this.canvas.addEventListener("pointerdown", (e) => this._onDown(e));
-    this.canvas.addEventListener("pointermove", (e) => this._onMove(e));
-    this.canvas.addEventListener("pointerup", (e) => this._onUp(e));
-    this.canvas.addEventListener("pointercancel", (e) => this._onUp(e));
+    this.canvas.addEventListener("pointerdown", this._down);
+    this.canvas.addEventListener("pointermove", this._move);
+    this.canvas.addEventListener("pointerup", this._up);
+    this.canvas.addEventListener("pointercancel", this._up);
+  }
+
+  // The composer is created fresh each time a cell is opened, so it has to
+  // clean up after itself or listeners pile up on window/the canvas.
+  destroy() {
+    window.removeEventListener("resize", this._resize);
+    window.removeEventListener("orientationchange", this._onOrient);
+    this.canvas.removeEventListener("pointerdown", this._down);
+    this.canvas.removeEventListener("pointermove", this._move);
+    this.canvas.removeEventListener("pointerup", this._up);
+    this.canvas.removeEventListener("pointercancel", this._up);
   }
 
   setTool(t) {
@@ -136,18 +154,21 @@ export class NoteComposer {
     this.redoStack = [];
     this.current = null;
     this._redraw();
+    this.onChange();
   }
 
   undo() {
     if (this.strokes.length === 0) return;
     this.redoStack.push(this.strokes.pop());
     this._redraw();
+    this.onChange();
   }
 
   redo() {
     if (this.redoStack.length === 0) return;
     this.strokes.push(this.redoStack.pop());
     this._redraw();
+    this.onChange();
   }
 
   // Plain-object copy of the composed strokes, ready to post to Firebase.
@@ -172,6 +193,7 @@ export class NoteComposer {
       this.strokes.push({ tool: "fill", color: this.color, size: this.size, points: [pt] });
       this.redoStack = [];
       this._redraw();
+      this.onChange();
       e.preventDefault();
       return;
     }
@@ -211,6 +233,7 @@ export class NoteComposer {
     }
     this.current = null;
     this._redraw();
+    this.onChange();
   }
 }
 

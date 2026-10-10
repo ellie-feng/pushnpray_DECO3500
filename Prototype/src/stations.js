@@ -20,13 +20,15 @@ export const STATIONS = {
     label: "Printer",
     icon: "🖨️",
     duetRole: "B",
+    // Asked about what people are up to in the library, not the printing
+    // itself — the printer sits where people study, read, snack and play.
     prompts: [
-      "What are you printing?",
-      "Urgent or can it wait?",
-      "Any printer jams today?",
-      "What's due today?",
-      "Colour or black & white?",
-      "Stapled or loose?",
+      "What are you studying?",
+      "What are you eating?",
+      "What are you watching?",
+      "What are you reading?",
+      "What are you playing?",
+      "What's on your agenda this week?",
     ],
   },
 };
