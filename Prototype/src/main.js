@@ -66,6 +66,8 @@ const els = {
 
   finishCanvas: document.getElementById("finish-canvas"),
   finishCountdown: document.getElementById("finish-countdown"),
+  shareQr: document.getElementById("share-qr"),
+  shareStatus: document.getElementById("share-status"),
   revealWord: document.getElementById("reveal-word"),
   revealEmoji: document.getElementById("reveal-emoji"),
   saveBtn: document.getElementById("save-btn"),

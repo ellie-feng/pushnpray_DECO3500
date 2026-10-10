@@ -18,6 +18,13 @@
       "$station": {
         "notes": { ".write": true }
       }
+    },
+    "shares": {
+      "$id": {
+        ".read": true,
+        ".write": "!data.exists()",
+        ".validate": "newData.hasChildren(['img', 't']) && newData.child('img').isString() && newData.child('img').val().length < 900000"
+      }
     }
   }
 }

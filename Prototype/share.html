@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Your drawing · Push'n'Pray</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#fbf3e6">
+<meta name="robots" content="noindex">
+<style>
+  :root {
+    --bg: #fbf3e6;
+    --ink: #232733;
+    --muted: #767b8a;
+    --accent: #ff5a5f;
+    --line: #e7e0d2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
+  }
+  main {
+    width: 100%;
+    max-width: 560px;
+    text-align: center;
+  }
+  .brand { font-weight: 800; letter-spacing: 0.02em; color: var(--muted); margin: 8px 0 4px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; line-height: 1.2; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .frame {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(35, 39, 51, 0.1);
+    padding: 8px;
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .frame img { width: 100%; height: auto; border-radius: 10px; display: block; }
+  .btn {
+    display: inline-block;
+    margin-top: 20px;
+    background: var(--accent);
+    color: #fff;
+    border: 0;
+    border-radius: 999px;
+    padding: 14px 32px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .hint { color: var(--muted); font-size: 0.9rem; margin-top: 14px; line-height: 1.4; }
+  .state { color: var(--muted); padding: 40px 16px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+  <main>
+    <p class="brand">Push'n'Pray</p>
+    <h1 id="title">Your drawing</h1>
+    <p class="sub" id="sub">Made together at the library</p>
+
+    <div class="frame">
+      <div class="state" id="state">Loading your drawing&hellip;</div>
+      <img id="img" alt="Your drawing" hidden>
+    </div>
+
+    <a class="btn" id="save" hidden>Save image</a>
+    <p class="hint" id="hint" hidden>Or press and hold the image, then choose <strong>Save to Photos</strong>.</p>
+  </main>
+  <script type="module" src="src/share.js"></script>
+</body>
+</html>

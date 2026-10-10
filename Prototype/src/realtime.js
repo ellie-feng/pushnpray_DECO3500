@@ -6,7 +6,10 @@
 //     - lastActive = last heartbeat timestamp while on the board screen
 //       (used to detect "someone is actually using this station right now")
 //   room/session: { state, round, boardSince, startAt, endsAt,
-//                    prompt, emoji }
+//                    prompt, emoji, token }
+//     - token: random per round; with `round` it forms the id of the shared
+//       copy of the finished drawing (see shares/ below), so both devices
+//       agree on one unguessable link without talking to each other
 //     - prompt/emoji: one shared scene both players draw together, known to
 //       both from the start (not a secret word each answers alone)
 //     - state "board"    -> default message-board mode, everyone idle
@@ -19,6 +22,10 @@
 //   room/live/{A|B}:   { tool, color, size, points }  (in-progress duet stroke)
 //   room/presence/{A|B}/compliment: { text, round, t }  (latest one sent)
 //   trails/{stationId}/notes/{gx_gy}: { strokes:[...], t, reports? }
+//   shares/{round}_{token}: { img, prompt, emoji, t }
+//     - a JPEG data URL of a finished duet drawing, which the finish screen's
+//       QR code links to (share.html). Write-once and readable only by exact
+//       id (no listing) — see firebase/database.rules.json
 //     - a shared grid, one per station: "gx_gy" is both the note's
 //       position and its claim — posting is a transaction that aborts if
 //       the cell is already taken, so nobody can draw over an existing
@@ -34,6 +41,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import {
   getDatabase,
   ref,
+  get,
   onValue,
   set,
   update,
@@ -55,6 +63,11 @@ const db = getDatabase(app);
 // re-triggering a new duet while the pair is still standing there right
 // after the last one ended.
 const BOARD_COOLDOWN_MS = 12000;
+
+function randomToken() {
+  const bytes = crypto.getRandomValues(new Uint8Array(6));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 // ---------- server-synced clock ----------
 let serverOffset = 0;
@@ -119,6 +132,7 @@ export async function tryTriggerDuet() {
       round: (current.round || 0) + 1,
       prompt: p.word,
       emoji: p.emoji,
+      token: randomToken(),
     };
   });
 }
@@ -176,6 +190,31 @@ export function watchStrokes(onAdd, onRemove) {
   const strokesRef = ref(db, "room/strokes");
   onChildAdded(strokesRef, (snap) => onAdd(snap.key, snap.val()));
   onChildRemoved(strokesRef, (snap) => onRemove(snap.key));
+}
+
+// ---------- shared copies of finished drawings ----------
+const SHARE_ROOT = "shares";
+
+// Saves a finished drawing under `id` and resolves true once a copy exists.
+// Both devices call this with the same id at the end of a round; the rules
+// make shares write-once, so the second write is rejected — which is fine,
+// as long as the first one landed, hence the follow-up read.
+export async function uploadShare(id, payload) {
+  try {
+    await set(ref(db, `${SHARE_ROOT}/${id}`), payload);
+    return true;
+  } catch {
+    try {
+      return (await fetchShare(id)) != null;
+    } catch {
+      return false;
+    }
+  }
+}
+
+export async function fetchShare(id) {
+  const snap = await get(ref(db, `${SHARE_ROOT}/${id}`));
+  return snap.val();
 }
 
 // ---------- duet compliments ----------

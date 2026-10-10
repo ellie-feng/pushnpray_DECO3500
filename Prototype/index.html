@@ -189,7 +189,7 @@
 
     <!-- FINISH -->
     <section id="screen-finish" class="screen" data-screen="finish" hidden>
-      <div class="center-card">
+      <div class="center-card finish-card">
         <h1>Time's up! ⏰</h1>
         <p class="muted">You made this drawing together:</p>
         <div class="reveal-row">
@@ -198,7 +198,18 @@
             <div class="reveal-word" id="reveal-word"></div>
           </div>
         </div>
-        <canvas id="finish-canvas"></canvas>
+        <div class="finish-body">
+          <canvas id="finish-canvas"></canvas>
+          <!-- A QR code to a copy of the drawing you can save on your phone -->
+          <div class="share-block">
+            <div class="share-title">Scan to save your drawing</div>
+            <div class="share-qr-wrap">
+              <canvas id="share-qr" hidden></canvas>
+              <div class="share-status" id="share-status">Preparing your link&hellip;</div>
+            </div>
+            <div class="muted small">Point your phone's camera at the code</div>
+          </div>
+        </div>
         <div class="finish-actions">
           <button id="save-btn" class="btn">Save image</button>
           <button id="done-btn" class="btn btn-primary">Done</button>

@@ -6,14 +6,21 @@ import * as rt from "./realtime.js";
 import { DrawingCanvas } from "./canvas.js";
 import { NoteComposer, renderNoteThumbnail } from "./board.js";
 import { confirmDialog, showToast } from "./ui.js";
+import { drawQr } from "./qr.js";
 
 const TURN_MS = 30000;
 // How fresh a heartbeat must be to count as "someone is using this station
 // right now" for the purposes of triggering a duet.
 const ACTIVE_WINDOW_MS = 9000;
 // How long the finish/reveal screen stays up before auto-returning to the
-// board (a "Done" button can also skip this early).
-const FINISH_VIEW_MS = 10000;
+// board (a "Done" button can also skip this early). Long enough to get a
+// phone out and scan the QR code.
+const FINISH_VIEW_MS = 45000;
+// The shared copy of the drawing is capped (see the shares rule in
+// firebase/database.rules.json); the export steps JPEG quality down until it
+// fits.
+const SHARE_IMG_MAX_SIDE = 1200;
+const SHARE_IMG_MAX_CHARS = 700000;
 // Size of one grid cell on the shared board canvas, in CSS px — must match
 // the .board-grid gap/padding values in styles.css (checked at the one
 // place that does the pixel math, see panToGridCell()).
@@ -85,6 +92,7 @@ let onPromptChangeCallbacks = [];
 let lastPromptKey = null;
 let lastComplimentT = null; // t of the latest partner compliment already shown
 let lastComplimentSentAt = 0;
+let shareRun = 0; // bumped per finish screen so a slow upload can't paint a stale QR
 let complimentBubbleTimeout = null;
 let boardPrompt = "";
 let boardScrolled = false; // per visit: has the view been scrolled to existing content yet
@@ -952,12 +960,13 @@ function updateFinish(now) {
     // Scale the display size to fit the finish card, preserving aspect
     // ratio (the base canvas's pixel buffer is devicePixelRatio-scaled and
     // much larger than any sensible on-screen size here).
-    const maxW = 560;
-    const maxH = 260;
+    const maxW = 460;
+    const maxH = 300;
     const scale = Math.min(maxW / els.finishCanvas.width, maxH / els.finishCanvas.height, 1);
     els.finishCanvas.style.width = `${els.finishCanvas.width * scale}px`;
     els.finishCanvas.style.height = `${els.finishCanvas.height * scale}px`;
     fctx.drawImage(els.canvasBase, 0, 0);
+    prepareShare();
   }
 
   const secLeft = Math.max(0, Math.ceil((finishReturnAt - now) / 1000));
@@ -967,6 +976,57 @@ function updateFinish(now) {
   if (!returnRequested && now >= finishReturnAt) {
     returnRequested = true;
     rt.returnToBoard();
+  }
+}
+
+// The drawing as a JPEG on a white background (the duet canvas itself is
+// transparent, with white only coming from CSS, and erased areas are holes),
+// scaled down and re-encoded until it fits the share size cap.
+function exportShareImage() {
+  const src = els.canvasBase;
+  const scale = Math.min(1, SHARE_IMG_MAX_SIDE / Math.max(src.width, src.height));
+  const out = document.createElement("canvas");
+  out.width = Math.max(1, Math.round(src.width * scale));
+  out.height = Math.max(1, Math.round(src.height * scale));
+  const ctx = out.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(src, 0, 0, out.width, out.height);
+  for (const quality of [0.88, 0.75, 0.6, 0.45, 0.3]) {
+    const url = out.toDataURL("image/jpeg", quality);
+    if (url.length <= SHARE_IMG_MAX_CHARS) return url;
+  }
+  return null;
+}
+
+// Uploads a copy of the finished drawing and shows a QR code linking to it
+// (share.html), so either player can scan it and save the image on their own
+// phone. Both devices do this with the same id (round + the round's token),
+// so they end up showing the same code.
+async function prepareShare() {
+  const run = ++shareRun;
+  els.shareQr.hidden = true;
+  els.shareStatus.hidden = false;
+  els.shareStatus.textContent = "Preparing your link…";
+  try {
+    const img = exportShareImage();
+    if (!img) throw new Error("image too large");
+    const id = `${session.round}_${session.token || Math.random().toString(36).slice(2, 10)}`;
+    const saved = await rt.uploadShare(id, {
+      img,
+      prompt: session.prompt || "",
+      emoji: session.emoji || "",
+      t: Date.now(),
+    });
+    if (!saved) throw new Error("upload failed");
+    const link = new URL(`share.html?id=${encodeURIComponent(id)}`, location.href).href;
+    await drawQr(els.shareQr, link, 200);
+    if (run !== shareRun) return;
+    els.shareQr.hidden = false;
+    els.shareStatus.hidden = true;
+  } catch {
+    if (run !== shareRun) return;
+    els.shareStatus.textContent = "Couldn't make a download link this time.";
   }
 }
 
