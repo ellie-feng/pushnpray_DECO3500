@@ -348,10 +348,6 @@ export function unlockAudio() {
   if (audioCtx.state === "suspended") audioCtx.resume();
 }
 
-export function getFinishDataUrl() {
-  return els.finishCanvas.toDataURL("image/png");
-}
-
 function tick() {
   render();
 }
