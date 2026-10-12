@@ -35,6 +35,16 @@ const els = {
   onboardingCard: document.getElementById("onboarding-card"),
   onboardingNext: document.getElementById("onboarding-next"),
 
+  // match ("someone's at the other station")
+  matchYouIcon: document.getElementById("match-you-icon"),
+  matchYouLabel: document.getElementById("match-you-label"),
+  matchThemIcon: document.getElementById("match-them-icon"),
+  matchThemLabel: document.getElementById("match-them-label"),
+  matchTitle: document.getElementById("match-title"),
+  matchText: document.getElementById("match-text"),
+  matchYes: document.getElementById("match-yes"),
+  matchNo: document.getElementById("match-no"),
+
   // lobby
   pillYou: document.getElementById("pill-you"),
   pillPartner: document.getElementById("pill-partner"),
@@ -142,20 +152,35 @@ els.exitBtn.addEventListener("click", async () => {
   if (ok) game.leaveRound();
 });
 
+// ---------- match: there's a real person at the other station ----------
+// Each iPad is permanently one station, so who's on the other end is fixed
+// and this can be filled in once at boot rather than per round.
+function renderMatch(station) {
+  const other = Object.values(STATIONS).find((s) => s.duetRole !== station.duetRole);
+  els.matchYouIcon.textContent = station.icon;
+  els.matchYouLabel.textContent = `You · ${station.label}`;
+  els.matchThemIcon.textContent = other.icon;
+  els.matchThemLabel.textContent = other.label;
+  els.matchTitle.textContent = `Someone's at the ${other.label}! 👋`;
+  els.matchText.textContent = `There's a real person at the ${other.label} right now. Wanna draw something together?`;
+}
+els.matchYes.addEventListener("click", () => game.confirmMatch());
+els.matchNo.addEventListener("click", () => game.leaveRound());
+
 // ---------- onboarding: one page, the scene front and centre ----------
 function renderOnboarding() {
   const p = game.sharedPrompt();
   const icon = p ? p.emoji : "🎨";
-  const scene = p ? p.word : "Loading your scene&hellip;";
+  const scene = p ? p.word : "Loading your mission&hellip;";
   els.onboardingCard.innerHTML = `
     <div class="ob-icon">${icon}</div>
-    <p class="ob-eyebrow">You're drawing together</p>
+    <p class="ob-eyebrow">Your mission, should you choose to doodle it</p>
     <h2 class="ob-question">${scene}</h2>
     <ul class="ob-rules">
-      <li><span class="ob-rule-icon">🎨</span><span>You and your partner are drawing this scene on <strong>one shared canvas</strong>, live.</span></li>
-      <li><span class="ob-rule-icon">⏱️</span><span>2:00 total, in 30-second turns — Player 1, then Player 2, back and forth.</span></li>
-      <li><span class="ob-rule-icon">👀</span><span>Not your turn? Watch what they're adding — you're building one picture together.</span></li>
-      <li><span class="ob-rule-icon">💌</span><span>In the final 30 seconds, you can send each other a compliment.</span></li>
+      <li><span class="ob-rule-icon">🎨</span><span>One canvas, two artists. You're sketching this <strong>together</strong>, live.</span></li>
+      <li><span class="ob-rule-icon">⏱️</span><span>2 minutes, 30-second turns. Player 1 goes, then Player 2, then round again.</span></li>
+      <li><span class="ob-rule-icon">👀</span><span>Not your turn? Sit back and watch the magic happen.</span></li>
+      <li><span class="ob-rule-icon">💌</span><span>Last 30 seconds: send your partner some love.</span></li>
     </ul>`;
 }
 
@@ -196,14 +221,14 @@ function completeReady() {
   holding = false;
   isReady = true;
   els.readyBtn.classList.add("is-ready");
-  els.readyLabel.innerHTML = "Ready!<br>Waiting&hellip;";
+  els.readyLabel.innerHTML = "Locked in!<br>Waiting&hellip;";
   game.markReady();
 }
 
 function resetReadyUI() {
   isReady = false;
   els.readyBtn.classList.remove("is-ready");
-  els.readyLabel.innerHTML = "Hold to<br>ready up";
+  els.readyLabel.innerHTML = "Hold to<br>lock in";
   setRing(0);
 }
 
@@ -329,6 +354,7 @@ async function boot() {
     showSetupHelp();
     return;
   }
+  renderMatch(station);
   await game.init(els, station);
   // From here on, game.js's render loop owns all screen switching.
 }

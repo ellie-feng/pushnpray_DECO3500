@@ -21,7 +21,7 @@
 //   room/strokes/{id}: { role, tool, color, size, points:[{x,y,p}], t }
 //   room/live/{A|B}:   { tool, color, size, points }  (in-progress duet stroke)
 //   room/presence/{A|B}/compliment: { text, round, t }  (latest one sent)
-//   trails/{stationId}/notes/{gx_gy}: { strokes:[...], t, reports? }
+//   trails/{stationId}/notes/{gx_gy}: { strokes:[...], t, prompt?, hearts?, reports? }
 //   shares/{round}_{token}: { img, prompt, emoji, t }
 //     - a JPEG data URL of a finished duet drawing, which the finish screen's
 //       QR code links to (share.html). Write-once and readable only by exact
@@ -247,12 +247,26 @@ export function watchLive(role, cb) {
 // already occupied, so two people can never draw over the same spot (they
 // can only ever add around each other). There's no per-pixel collision
 // detection — the grid cell *is* the reserved region.
-export async function postNote(stationId, cellKey, strokes) {
+// `prompt` is the question this drawing answers — it's stored with the note
+// because the board's prompt changes every time a box is added, so a box
+// would otherwise lose track of what it was a reply to.
+export async function postNote(stationId, cellKey, strokes, prompt) {
   const res = await runTransaction(ref(db, `trails/${stationId}/notes/${cellKey}`), (current) => {
     if (current) return; // already occupied -> abort
-    return { strokes, t: Date.now() };
+    const note = { strokes, t: Date.now() };
+    if (prompt) note.prompt = prompt;
+    return note;
   });
   return res.committed;
+}
+
+// Adds one heart to a note — same shape as reportNote below: a counter on
+// the note itself, under the already-writable notes/ path, only ever called
+// for notes that exist.
+export async function heartNote(stationId, cellKey) {
+  await runTransaction(ref(db, `trails/${stationId}/notes/${cellKey}/hearts`), (current) => {
+    return (typeof current === "number" ? current : 0) + 1;
+  });
 }
 
 // Adds one report to a note. Stored as a counter on the note itself (under

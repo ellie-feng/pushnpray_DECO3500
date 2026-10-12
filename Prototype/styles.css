@@ -609,6 +609,12 @@ body {
   color: var(--ink);
   animation: landing-float 3.2s ease-in-out infinite;
 }
+.landing-tagline {
+  font-size: 2rem;
+  font-weight: 800;
+  margin: 0 0 26px;
+  color: var(--ink);
+}
 .landing-subtitle {
   font-size: 1.3rem;
   font-weight: 700;
@@ -662,6 +668,20 @@ body {
   font-size: 2rem;
   font-weight: 800;
   line-height: 1.2;
+}
+/* Plays when a new box is added and the question changes. */
+.board-prompt.swap {
+  animation: prompt-swap 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+@keyframes prompt-swap {
+  0% {
+    transform: translateY(-14px) scale(0.96);
+    opacity: 0;
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+  }
 }
 
 .board-viewport {
@@ -727,6 +747,58 @@ body {
 }
 .reported-icon {
   font-size: 2rem;
+}
+/* The question a drawing was answering, along the bottom of its box. */
+.cell-caption {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 2;
+  max-width: calc(100% - 96px);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--muted);
+  pointer-events: none;
+}
+.heart-btn {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
+  min-width: 52px;
+  height: 38px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 14px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--muted);
+  cursor: pointer;
+}
+.heart-btn.has-hearts {
+  color: var(--accent);
+  border-color: #ffc4c6;
+}
+.heart-btn.pop {
+  animation: heart-pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.6);
+}
+@keyframes heart-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.4);
+    color: var(--accent);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 .report-btn {
   position: absolute;
@@ -803,6 +875,190 @@ body {
   width: 100%;
   height: 100%;
   touch-action: none;
+}
+
+/* ---------- match: "someone's at the other station" ----------
+   Two tablets; the second slides in, a link draws between them, dots travel
+   along it, then a handshake pops. Pure CSS, and it restarts every time the
+   screen is shown (display:none -> flex re-triggers animations). */
+.match-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  max-width: 640px;
+  padding: 0 24px;
+}
+.match-wrap h1 {
+  margin: 14px 0 0;
+  font-size: 2.2rem;
+  animation: match-fade 0.5s ease 1.7s both;
+}
+.match-wrap p {
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1.4;
+  animation: match-fade 0.5s ease 1.9s both;
+}
+.match-actions {
+  display: flex;
+  gap: 14px;
+  margin-top: 18px;
+  animation: match-fade 0.5s ease 2.1s both;
+}
+.match-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+.match-tablet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.match-screen {
+  width: 168px;
+  height: 120px;
+  border: 6px solid var(--ink);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+}
+.match-label {
+  font-weight: 700;
+  font-size: 1rem;
+}
+.match-you {
+  animation: match-pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+.match-them {
+  animation: match-slide-in 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) 0.5s both;
+}
+.match-them .match-screen {
+  animation: match-wake 1s ease 1.2s both;
+}
+.match-link {
+  position: relative;
+  width: 150px;
+  height: 44px;
+  margin: 0 8px 28px;
+}
+.match-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 0;
+  border-top: 5px dashed var(--accent-2);
+  transform-origin: left center;
+  animation: match-draw 0.6s ease 1.1s both;
+}
+.match-dot {
+  position: absolute;
+  top: calc(50% - 6px);
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0;
+  animation: match-travel 1.3s linear 1.6s infinite;
+}
+.match-dot.d2 {
+  animation-delay: 2.05s;
+}
+.match-dot.d3 {
+  animation-delay: 2.5s;
+}
+.match-badge {
+  position: absolute;
+  left: 50%;
+  top: -14px;
+  font-size: 2rem;
+  transform: translateX(-50%);
+  animation: match-badge 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.6) 1.7s both;
+}
+@keyframes match-pop {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes match-slide-in {
+  from {
+    transform: translateX(160px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes match-wake {
+  0% {
+    box-shadow: var(--shadow);
+  }
+  40% {
+    box-shadow: 0 0 0 10px rgba(77, 150, 255, 0.35), var(--shadow);
+  }
+  100% {
+    box-shadow: var(--shadow);
+  }
+}
+@keyframes match-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes match-travel {
+  0% {
+    left: 0;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    left: calc(100% - 12px);
+    opacity: 0;
+  }
+}
+@keyframes match-badge {
+  from {
+    transform: translateX(-50%) scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+  }
+}
+@keyframes match-fade {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
 }
 
 /* ---------- alert ---------- */

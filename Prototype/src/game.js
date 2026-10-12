@@ -77,6 +77,7 @@ let currentScreenName = null;
 let currentCanDraw = false;
 let lastServerState = null; // for detecting session.state edges (board -> lobby, etc.)
 let localLandingSeen = false; // per visit: has this device tapped past the landing splash yet
+let localMatchSeen = false; // per-round: has this device said yes to drawing with the other station yet
 let localOnboardingSeen = false; // per-round: has this device clicked through onboarding yet
 let alertTimer = null;
 let localAlertSeen = false;
@@ -94,7 +95,11 @@ let lastComplimentT = null; // t of the latest partner compliment already shown
 let lastComplimentSentAt = 0;
 let shareRun = 0; // bumped per finish screen so a slow upload can't paint a stale QR
 let complimentBubbleTimeout = null;
-let boardPrompt = "";
+let boardPrompt = ""; // the question currently shown on the board — changes every time a box is added
+let composePrompt = ""; // the question the box being drawn right now is answering (fixed when it was opened)
+let prevNoteCount = null; // notes seen in the previous snapshot, to spot a new box being added
+const heartCooldown = new Map(); // cell key -> ms timestamp of the last heart tap, to stop machine-gun tapping
+let popHeartKey = null; // the box whose heart should play its pop animation on the next render
 let boardScrolled = false; // per visit: has the view been scrolled to existing content yet
 let trailLoaded = false; // has watchTrail delivered its first real snapshot yet
 let renderedMinGX = null; // the (padded) bounds used for the grid's local origin last render
@@ -147,6 +152,11 @@ export async function init(domEls, stationConfig) {
   rt.watchTrail(station.id, (notes) => {
     boardNotes = notes;
     trailLoaded = true;
+    // A new box (anyone's) means a new question. Only a rise in the count
+    // counts: the first snapshot isn't a new box, and neither is a removal.
+    const noteCount = Object.keys(notes).filter((k) => parseCellKey(k)).length;
+    if (prevNoteCount !== null && noteCount > prevNoteCount) pickBoardPrompt(true);
+    prevNoteCount = noteCount;
     // Someone else filled the very cell this device is drawing into. (Not
     // when it's our own submit landing — Firebase reports that write to
     // this listener before the post's promise resolves.)
@@ -208,6 +218,11 @@ export function onPromptChange(cb) {
 // the partner is told why (see the leftBy handling in render()).
 export function leaveRound() {
   return rt.returnToBoard(role);
+}
+
+// "Let's draw!" on the match screen — accept the other station's invitation.
+export function confirmMatch() {
+  localMatchSeen = true;
 }
 
 // Called by main.js when the "Let's go" button on the last onboarding card
@@ -309,7 +324,7 @@ export async function submitCompose() {
   updateComposeSubmit();
   let ok = false;
   try {
-    ok = await rt.postNote(station.id, cellKeyOf(gx, gy), strokes);
+    ok = await rt.postNote(station.id, cellKeyOf(gx, gy), strokes, composePrompt);
   } catch {
     ok = false; // a rejected write (permissions, network blip) counts as "not saved"
   }
@@ -383,6 +398,7 @@ function render() {
       localLandingSeen = false; // show the attract splash again for the next visitor
     }
     if (state === "lobby") {
+      localMatchSeen = false;
       localOnboardingSeen = false;
       localAlertSeen = false;
       clearTimeout(alertTimer);
@@ -422,6 +438,8 @@ function render() {
           alertTimer = null;
         }, 2500);
       }
+    } else if (!localMatchSeen) {
+      showScreen("match");
     } else if (!localOnboardingSeen) {
       showScreen("onboarding");
     } else {
@@ -479,10 +497,21 @@ function isActive(p) {
   return rt.serverNow() - p.lastActive < ACTIVE_WINDOW_MS;
 }
 
-function pickBoardPrompt() {
-  const list = station.prompts;
-  boardPrompt = list[Math.floor(Math.random() * list.length)];
-  if (els.boardPromptText) els.boardPromptText.textContent = boardPrompt;
+// Picks a prompt for the board, never the one already showing. `animate` is
+// for the mid-visit change after someone adds a box, so the banner visibly
+// swaps instead of the text just silently changing.
+function pickBoardPrompt(animate) {
+  const list = station.prompts.filter((p) => p !== boardPrompt);
+  const pool = list.length ? list : station.prompts;
+  boardPrompt = pool[Math.floor(Math.random() * pool.length)];
+  const el = els.boardPromptText;
+  if (!el) return;
+  el.textContent = boardPrompt;
+  if (animate) {
+    el.classList.remove("swap");
+    void el.offsetWidth; // restart the animation if it's already running
+    el.classList.add("swap");
+  }
 }
 
 function updateBoard() {
@@ -573,7 +602,8 @@ function startCompose(gx, gy, originRect) {
   if (boardNotes[cellKeyOf(gx, gy)]) return; // taken since the grid was drawn
   composeCell = { gx, gy };
   composeSubmitting = false;
-  els.composeTitle.textContent = boardPrompt;
+  composePrompt = boardPrompt;
+  els.composeTitle.textContent = composePrompt;
   els.composeOverlay.hidden = false;
   layoutComposeCard();
   composeComposer = new NoteComposer(els.composeCanvas, updateComposeSubmit);
@@ -639,6 +669,19 @@ function wasPan() {
   return panTravel > 8;
 }
 
+// Hearts are increment-only on purpose: the iPad is shared by everyone who
+// walks up, so a per-device "you already liked this" (or toggle) would stop
+// the next visitor from hearting the same drawing, or undo the last one's.
+function heartCell(key) {
+  const now = performance.now();
+  if (now - (heartCooldown.get(key) || 0) < 600) return;
+  heartCooldown.set(key, now);
+  popHeartKey = key;
+  rt.heartNote(station.id, key).catch(() => {
+    showToast("Couldn't send that heart — try again.");
+  });
+}
+
 async function reportCell(key) {
   const ok = await confirmDialog({
     title: "Report this drawing?",
@@ -697,6 +740,27 @@ function renderBoardGrid() {
           cell.appendChild(cv);
           els.boardGrid.appendChild(cell);
           renderNoteThumbnail(cv, note.strokes);
+          if (typeof note.prompt === "string" && note.prompt) {
+            const caption = document.createElement("div");
+            caption.className = "cell-caption";
+            caption.textContent = note.prompt;
+            cell.appendChild(caption);
+          }
+          const hearts = typeof note.hearts === "number" ? note.hearts : 0;
+          const heartBtn = document.createElement("button");
+          heartBtn.className = "heart-btn" + (hearts > 0 ? " has-hearts" : "");
+          heartBtn.textContent = hearts > 0 ? `♥ ${hearts}` : "♡";
+          heartBtn.title = "Love this drawing";
+          if (popHeartKey === key) {
+            heartBtn.classList.add("pop");
+            popHeartKey = null;
+          }
+          heartBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (wasPan()) return;
+            heartCell(key);
+          });
+          cell.appendChild(heartBtn);
           const reportBtn = document.createElement("button");
           reportBtn.className = "report-btn";
           reportBtn.textContent = "⚑ Report";
