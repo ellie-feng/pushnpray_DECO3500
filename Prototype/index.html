@@ -26,8 +26,9 @@
         <div class="landing-blob blob-2"></div>
         <div class="landing-blob blob-3"></div>
         <div class="landing-blob blob-4"></div>
-        <h1 class="landing-title">Share your<br>thoughts</h1>
-        <p class="landing-subtitle">tap to continue</p>
+        <h1 class="landing-title">Locked in?</h1>
+        <p class="landing-tagline">Sketch n chill for 2 minutes</p>
+        <p class="landing-subtitle">tap to start</p>
       </div>
     </section>
 
@@ -96,7 +97,38 @@
       <div class="center-card alert-card">
         <div class="alert-icon">🍀</div>
         <h1>It's your lucky day!</h1>
-        <p class="muted">You've both been picked for a bonus round — let's draw something together.</p>
+        <p class="muted">A surprise bonus round just unlocked.</p>
+      </div>
+    </section>
+
+    <!-- MATCH — makes it explicit that there's another real person at the
+         other station: the two tablets "connect", then ask if you want to
+         draw together. -->
+    <section id="screen-match" class="screen" data-screen="match" hidden>
+      <div class="match-wrap">
+        <div class="match-stage">
+          <div class="match-tablet match-you">
+            <div class="match-screen" id="match-you-icon"></div>
+            <div class="match-label" id="match-you-label"></div>
+          </div>
+          <div class="match-link" aria-hidden="true">
+            <span class="match-line"></span>
+            <span class="match-dot d1"></span>
+            <span class="match-dot d2"></span>
+            <span class="match-dot d3"></span>
+            <span class="match-badge">🤝</span>
+          </div>
+          <div class="match-tablet match-them">
+            <div class="match-screen" id="match-them-icon"></div>
+            <div class="match-label" id="match-them-label"></div>
+          </div>
+        </div>
+        <h1 id="match-title"></h1>
+        <p class="muted" id="match-text"></p>
+        <div class="match-actions">
+          <button id="match-yes" class="btn btn-primary">Let's draw!</button>
+          <button id="match-no" class="btn">Not now</button>
+        </div>
       </div>
     </section>
 
@@ -106,7 +138,7 @@
     <section id="screen-onboarding" class="screen" data-screen="onboarding" hidden>
       <button class="btn leave-btn" data-leave>← Back to board</button>
       <div class="ob-card" id="onboarding-card"></div>
-      <button id="onboarding-next" class="btn btn-primary">Let's go</button>
+      <button id="onboarding-next" class="btn btn-primary">Let's sketch</button>
     </section>
 
     <!-- LOBBY / READY -->
@@ -122,9 +154,9 @@
             <circle class="ring-track" cx="60" cy="60" r="54"></circle>
             <circle class="ring-fill" id="ready-ring-fill" cx="60" cy="60" r="54"></circle>
           </svg>
-          <span class="ready-label" id="ready-label">Hold to<br>ready up</span>
+          <span class="ready-label" id="ready-label">Hold to<br>lock in</span>
         </button>
-        <p class="muted">The game starts once you're both ready</p>
+        <p class="muted">Starts once you're both locked in</p>
       </div>
     </section>
 
@@ -190,7 +222,7 @@
     <!-- FINISH -->
     <section id="screen-finish" class="screen" data-screen="finish" hidden>
       <div class="center-card finish-card">
-        <h1>Time's up! ⏰</h1>
+        <h1>Pencils down! ✏️</h1>
         <p class="muted">You made this drawing together:</p>
         <div class="reveal-row">
           <div class="reveal-item">
