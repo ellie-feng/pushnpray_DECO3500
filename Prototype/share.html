@@ -7,17 +7,19 @@
 <meta name="theme-color" content="#ffd23f">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,900,100&family=Figtree:wght@500;600;700;800&display=swap" rel="stylesheet">
 <meta name="robots" content="noindex">
 <style>
   :root {
-    --bg: #fff1a1;
-    --surface: #fffdf2;
-    --ink: #26252d;
-    --muted: #6e6a5c;
+    --bg: #fff4b3;
+    --surface: #fffbf3;
+    --ink: #2e2745;
+    --muted: #5f587a;
     --yellow: #ffd23f;
+    --lavender: #cdbef2;
     --line: #e2cc6b;
-    --hand: "Patrick Hand", "Bradley Hand", "Chalkboard SE", "Comic Sans MS", cursive;
+    --display: "Fraunces", "Cooper Black", "Baskerville", Georgia, serif;
+    --sans: "Figtree", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
   body {
@@ -29,7 +31,7 @@
       repeating-linear-gradient(to bottom, transparent 0, transparent 35px, rgba(61, 111, 216, 0.22) 35px, rgba(61, 111, 216, 0.22) 36px),
       var(--bg);
     color: var(--ink);
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    font-family: var(--sans);
     display: flex;
     justify-content: center;
     padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
@@ -39,11 +41,11 @@
     max-width: 560px;
     text-align: center;
   }
-  .brand { font-family: var(--hand); font-size: 1.2rem; letter-spacing: 0.02em; color: var(--muted); margin: 8px 0 4px; }
+  .brand { font-weight: 700; font-size: 0.95rem; letter-spacing: 0.04em; color: var(--muted); margin: 8px 0 4px; }
   h1 {
-    font-family: var(--hand);
-    font-weight: 400;
-    font-size: 2rem;
+    font-family: var(--display);
+    font-weight: 900;
+    font-size: 1.7rem;
     margin: 0 0 4px;
     line-height: 1.2;
     display: inline-block;
@@ -85,8 +87,9 @@
     box-shadow: 0 3px 0 var(--ink);
     border-radius: 999px;
     padding: 12px 32px;
-    font-family: var(--hand);
-    font-size: 1.35rem;
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 1.1rem;
     text-decoration: none;
   }
   .hint { color: var(--muted); font-size: 0.9rem; margin-top: 14px; line-height: 1.4; }

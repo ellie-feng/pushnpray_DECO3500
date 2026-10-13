@@ -1,13 +1,20 @@
 :root {
-  /* Notepad palette: yellow legal-pad paper, marker-yellow actions, and the
-     blue/red of a ruled page for lines and emphasis. */
-  --bg: #fff1a1; /* the paper */
-  --bg-soft: #fff8cf; /* paler paper, for wells and banners */
-  --surface: #fffdf2; /* cream sheets/cards that sit on the paper */
-  --ink: #26252d;
-  --muted: #6e6a5c;
-  --yellow: #ffd23f; /* marker yellow: fills and primary buttons */
+  /* Notepad palette: yellow legal-pad paper and marker-yellow actions, with
+     soft pastel "sticky note" colours (sampled from the design reference) for
+     cards, tools and tape, and the blue/red of a ruled page for lines. */
+  --bg: #fff4b3; /* the paper */
+  --bg-soft: #fff9d9; /* paler paper, for wells and banners */
+  --surface: #fffbf3; /* cream sheets/cards that sit on the paper */
+  --ink: #2e2745; /* purple-navy, used for all text and outlines */
+  --muted: #5f587a;
+  --yellow: #ffd23f; /* marker yellow: primary buttons, highlighter */
   --yellow-deep: #f2b705; /* darker yellow, for strokes that must show on cream */
+  --lavender: #cdbef2;
+  --butter: #ffe193;
+  --mint: #a8ddc6;
+  --peach: #ffc7a0;
+  --pink: #f9c0d9;
+  --blue: #b5d6f5;
   --accent: #ffd23f; /* action fill — always paired with --ink text */
   --accent-2: #3d6fd8; /* pen blue (ruled lines, links) */
   --pen-red: #e5484d; /* margin line, hearts, danger */
@@ -15,8 +22,9 @@
   --line: #e2cc6b; /* dividers and borders on the paper */
   --radius-lg: 22px;
   --radius-md: 14px;
-  --shadow: 0 8px 22px rgba(120, 90, 0, 0.16);
-  --hand: "Patrick Hand", "Bradley Hand", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+  --shadow: 0 8px 22px rgba(46, 39, 69, 0.14);
+  --display: "Fraunces", "Cooper Black", "Baskerville", Georgia, serif;
+  --sans: "Figtree", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   /* Ruled lines and the red margin, used as page backgrounds. */
   --ruled: repeating-linear-gradient(to bottom, transparent 0, transparent 35px, rgba(61, 111, 216, 0.22) 35px, rgba(61, 111, 216, 0.22) 36px);
   --margin: linear-gradient(to right, transparent 95px, rgba(229, 72, 77, 0.5) 95px, rgba(229, 72, 77, 0.5) 97px, transparent 97px);
@@ -33,7 +41,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  font-family: var(--sans);
   position: fixed;
   inset: 0;
   overflow: hidden;
@@ -738,7 +746,7 @@ body {
   justify-content: center;
 }
 .board-cell.empty:active {
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--bg-soft); /* a soft yellow press — a white flash wouldn't show on white */
 }
 .board-cell.empty .board-cell-plus {
   font-size: 2.2rem;
@@ -1284,8 +1292,8 @@ body {
    NOTEPAD THEME
    The look lives here: yellow legal-pad paper (ruled blue lines, a red
    margin, punched holes), marker-yellow buttons outlined in ink, cards held
-   up with tape, a handwriting face for headings, and highlighter strokes for
-   emphasis. The rules above are structure; this block is skin, so it can be
+   up with tape like pastel sticky notes, a heavy soft serif (Fraunces) for
+   headings over a clean sans (Figtree), and highlighter strokes for emphasis. The rules above are structure; this block is skin, so it can be
    tuned (or swapped out) in one place.
    ===================================================================== */
 
@@ -1386,37 +1394,11 @@ body::before {
   background-size: 44px 190px;
   background-position: 0 70px;
 }
-h1,
-h2,
-.btn,
-.tool-label,
-.size-btn,
-.ob-question,
-.ob-eyebrow,
-.reveal-word,
-.share-title,
-.match-label,
-.ready-label,
-.presence-pill,
-.hud-word,
-.hud-total,
-.compose-title,
-.board-prompt,
-.cell-caption,
-.turn-banner,
-.compliment-bubble,
-.toast,
-.landing-title,
-.landing-tagline,
-.landing-subtitle,
-.countdown-number {
-  font-family: var(--hand);
-}
+/* ---------- type: heavy soft serif for headings, clean sans for the rest ---------- */
 h1,
 h2,
 .landing-title,
 .landing-tagline,
-.landing-subtitle,
 .countdown-number,
 .ob-question,
 .reveal-word,
@@ -1424,7 +1406,25 @@ h2,
 .board-prompt,
 .compose-title,
 .hud-total {
-  font-weight: 400;
+  font-family: var(--display);
+  font-weight: 900;
+  line-height: 1.12;
+}
+.btn,
+.tool-label,
+.size-btn,
+.ob-eyebrow,
+.match-label,
+.ready-label,
+.presence-pill,
+.hud-word,
+.cell-caption,
+.turn-banner,
+.compliment-bubble,
+.toast,
+.heart-btn,
+.report-btn {
+  font-family: var(--sans);
 }
 
 /* ---------- buttons: marker-yellow, ink-outlined, they press down ---------- */
@@ -1436,8 +1436,8 @@ h2,
   background: var(--surface);
   border: 2px solid var(--ink);
   color: var(--ink);
-  font-size: 1.2rem;
-  font-weight: 400;
+  font-size: 1.05rem;
+  font-weight: 700;
   box-shadow: 0 3px 0 var(--ink);
   transition: transform 0.08s, box-shadow 0.08s;
 }
@@ -1460,7 +1460,7 @@ h2,
 }
 .leave-btn,
 .exit-btn {
-  font-size: 1.05rem;
+  font-size: 0.95rem;
 }
 
 /* ---------- cards: cream sheets held up with a strip of tape ---------- */
@@ -1469,8 +1469,15 @@ h2,
 .dialog-card {
   position: relative;
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 0;
   box-shadow: var(--shadow);
+}
+/* pastel sticky notes */
+.ob-card {
+  background: var(--lavender);
+}
+.alert-card {
+  background: var(--pink);
 }
 .center-card::before,
 .ob-card::before,
@@ -1487,22 +1494,27 @@ h2,
   transform: rotate(-2.5deg);
 }
 .ob-eyebrow {
-  font-size: 1.05rem;
-  letter-spacing: 0.02em;
-  text-transform: none;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  opacity: 0.75;
 }
 .ob-question {
-  font-size: 2.2rem;
+  font-size: 1.95rem;
+}
+.ob-rules li {
+  font-weight: 500;
 }
 .reveal-word {
-  font-size: 1.7rem;
+  font-size: 1.5rem;
 }
 .reveal-item {
-  background: var(--bg-soft);
-  border: 2px dashed var(--line);
+  background: var(--peach);
+  border: 0;
 }
 .share-title {
-  font-size: 1.4rem;
+  font-size: 1.2rem;
 }
 .share-qr-wrap {
   border: 2px solid var(--ink);
@@ -1516,14 +1528,22 @@ h2,
   background: var(--surface);
   border: 2px solid var(--ink);
   box-shadow: 0 3px 0 var(--ink);
-  font-size: 1.1rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+#pill-you {
+  background: var(--lavender);
+}
+#pill-partner {
+  background: var(--mint);
 }
 .ready-btn {
   border: 3px solid var(--ink);
   box-shadow: 0 6px 0 var(--ink);
 }
 .ready-label {
-  font-size: 1.6rem;
+  font-size: 1.35rem;
+  font-weight: 800;
 }
 .countdown-number {
   background: linear-gradient(transparent 60%, var(--yellow-deep) 60% 92%, transparent 92%);
@@ -1537,11 +1557,11 @@ h2,
   box-shadow: none;
 }
 .hud-word {
-  font-size: 1.3rem;
-  font-weight: 400;
+  font-size: 1.1rem;
+  font-weight: 800;
 }
 .hud-total {
-  font-size: 1.9rem;
+  font-size: 1.7rem;
 }
 .hud-turn {
   color: rgba(38, 37, 45, 0.72);
@@ -1550,17 +1570,17 @@ h2,
 .turn-banner {
   background: var(--ink);
   color: var(--yellow);
-  font-size: 1.35rem;
-  font-weight: 400;
+  font-size: 1.15rem;
+  font-weight: 700;
 }
 .compose-title {
-  font-size: 1.8rem;
+  font-size: 1.5rem;
 }
 .compose-overlay {
   background: var(--margin), var(--ruled), var(--bg);
 }
 
-/* ---------- toolbar ---------- */
+/* ---------- toolbar: every tool in its own pastel ---------- */
 .toolbar {
   background: var(--surface);
   border-right: 2px solid var(--ink);
@@ -1571,55 +1591,81 @@ h2,
   justify-content: center;
   color: var(--ink);
   background: var(--bg-soft);
-  border: 2px solid var(--line);
+  border: 2px solid transparent;
+}
+.tool:nth-child(1) .tool-btn {
+  background: var(--pink);
+}
+.tool:nth-child(2) .tool-btn {
+  background: var(--butter);
+}
+.tool:nth-child(3) .tool-btn {
+  background: var(--blue);
+}
+.tool:nth-child(4) .tool-btn {
+  background: var(--mint);
+}
+.tool:nth-child(5) .tool-btn {
+  background: var(--lavender);
+}
+.tool:nth-child(6) .tool-btn {
+  background: var(--peach);
+}
+.tool-btn.active {
+  border-color: var(--ink);
+  box-shadow: 0 3px 0 var(--ink);
+  transform: translateY(-1px);
 }
 .tool-label {
-  font-size: 0.9rem;
-  font-weight: 400;
+  font-size: 0.78rem;
+  font-weight: 700;
   color: var(--muted);
+}
+.tool-btn.active + .tool-label {
+  color: var(--ink);
 }
 .size-btn {
   background: var(--surface);
   border: 2px solid var(--line);
-  font-size: 1.05rem;
-  font-weight: 400;
+  font-size: 0.95rem;
+  font-weight: 700;
   color: var(--ink);
 }
 
-/* ---------- landing: just the notepad page, with soft yellow glows ---------- */
+/* ---------- landing: the notepad page with soft pastel glows ---------- */
 #screen-landing {
   background: none;
 }
 .landing-blob {
-  opacity: 0.6;
+  opacity: 0.8;
 }
 .blob-1 {
-  background: #ffd23f;
+  background: var(--butter);
 }
 .blob-2 {
-  background: #ffb347;
+  background: var(--pink);
 }
 .blob-3 {
-  background: #fff08a;
+  background: var(--blue);
 }
 .blob-4 {
-  background: #ffc94d;
+  background: var(--mint);
 }
 .landing-title {
   display: inline-block;
-  font-size: 6.4rem;
-  line-height: 1.05;
+  font-size: 5.6rem;
   padding: 0 0.22em;
   background: linear-gradient(transparent 62%, var(--yellow-deep) 62% 92%, transparent 92%);
 }
 .landing-tagline {
   position: relative; /* keeps it above the glow blobs, which are positioned */
-  font-size: 2.4rem;
-  margin: 8px 0 26px;
+  font-size: 2rem;
+  margin: 12px 0 26px;
 }
 .landing-subtitle {
-  font-size: 1.7rem;
-  font-weight: 400;
+  font-family: var(--sans);
+  font-size: 1.3rem;
+  font-weight: 700;
   color: var(--ink);
   opacity: 0.75;
 }
@@ -1631,7 +1677,7 @@ h2,
 }
 .board-prompt {
   display: inline-block;
-  font-size: 2.4rem;
+  font-size: 2.1rem;
   padding: 0 0.3em;
   background: linear-gradient(transparent 58%, var(--yellow) 58% 94%, transparent 94%);
 }
@@ -1648,27 +1694,45 @@ h2,
   width: 64px;
   height: 22px;
   z-index: 1;
-  background: rgba(255, 210, 63, 0.82);
+  background: var(--tape, var(--butter));
+  opacity: 0.92;
   transform: rotate(-2deg);
   pointer-events: none;
 }
 .board-cell.filled:nth-child(even)::after {
   transform: rotate(2.5deg);
 }
+/* tape in rotating pastels */
+.board-cell.filled:nth-child(5n + 1) {
+  --tape: var(--pink);
+}
+.board-cell.filled:nth-child(5n + 2) {
+  --tape: var(--blue);
+}
+.board-cell.filled:nth-child(5n + 3) {
+  --tape: var(--mint);
+}
+.board-cell.filled:nth-child(5n + 4) {
+  --tape: var(--lavender);
+}
+.board-cell.filled:nth-child(5n) {
+  --tape: var(--peach);
+}
 .board-cell.empty {
-  border: 2px dashed rgba(38, 37, 45, 0.35);
-  background: rgba(255, 255, 255, 0.32);
+  border: 2px dashed rgba(46, 39, 69, 0.35);
+  background: #fff; /* unwritten notes stay plain white, with the plus sign */
 }
 .board-cell.empty .board-cell-plus {
   color: rgba(38, 37, 45, 0.55);
 }
 .board-cell.reported {
-  background: var(--bg-soft);
-  border: 2px dashed var(--line);
+  background: var(--lavender);
+  border: 2px dashed rgba(46, 39, 69, 0.3);
 }
+
 .cell-caption {
-  font-size: 0.95rem;
-  font-weight: 400;
+  font-size: 0.8rem;
+  font-weight: 700;
   color: var(--ink);
   border: 1px solid var(--line);
 }
@@ -1678,17 +1742,16 @@ h2,
   align-items: center;
   justify-content: center;
   gap: 5px;
-  font-family: var(--hand);
   border: 1.5px solid var(--ink);
   color: var(--ink);
 }
 .heart-btn {
-  font-size: 1.1rem;
-  font-weight: 400;
+  font-size: 1rem;
+  font-weight: 800;
 }
 .report-btn {
-  font-size: 0.9rem;
-  font-weight: 400;
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 /* ---------- match ---------- */
@@ -1697,9 +1760,15 @@ h2,
   border-color: var(--ink);
   color: var(--ink);
 }
+.match-you .match-screen {
+  background: var(--lavender);
+}
+.match-them .match-screen {
+  background: var(--mint);
+}
 .match-label {
-  font-size: 1.25rem;
-  font-weight: 400;
+  font-size: 1.05rem;
+  font-weight: 800;
 }
 .match-line {
   border-top-color: var(--accent-2);
@@ -1712,17 +1781,36 @@ h2,
 .compliment-bubble {
   background: var(--yellow);
   border: 2px solid var(--ink);
-  font-size: 1.45rem;
-  font-weight: 400;
+  font-size: 1.2rem;
+  font-weight: 800;
 }
 .toast {
   background: var(--ink);
   color: var(--yellow);
-  font-size: 1.15rem;
-  font-weight: 400;
+  font-size: 1rem;
+  font-weight: 700;
 }
 .dialog-card h2 {
-  font-size: 1.9rem;
+  font-size: 1.6rem;
+}
+/* each compliment a different pastel */
+.compliment-chip:nth-child(1) {
+  background: var(--pink);
+}
+.compliment-chip:nth-child(2) {
+  background: var(--butter);
+}
+.compliment-chip:nth-child(3) {
+  background: var(--blue);
+}
+.compliment-chip:nth-child(4) {
+  background: var(--mint);
+}
+.compliment-chip:nth-child(5) {
+  background: var(--lavender);
+}
+.compliment-chip:nth-child(6) {
+  background: var(--peach);
 }
 
 /* ---------- rotate hint ---------- */
