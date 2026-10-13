@@ -1458,7 +1458,7 @@ h2,
 /* ---------- top bars: the yellow strip at the head of a legal pad ---------- */
 .hud,
 .compose-bar {
-  background: var(--yellow);
+  background: var(--butter);
   border-bottom: 2px solid var(--ink);
   box-shadow: none;
 }
