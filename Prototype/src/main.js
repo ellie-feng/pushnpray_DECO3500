@@ -80,7 +80,6 @@ const els = {
   shareStatus: document.getElementById("share-status"),
   revealWord: document.getElementById("reveal-word"),
   revealEmoji: document.getElementById("reveal-emoji"),
-  saveBtn: document.getElementById("save-btn"),
   doneBtn: document.getElementById("done-btn"),
 
   setupList: document.getElementById("setup-list"),
@@ -301,9 +300,6 @@ els.complimentToggle.addEventListener("click", () => {
 });
 
 // ---------- finish screen ----------
-els.saveBtn.addEventListener("click", () => {
-  window.open(game.getFinishDataUrl(), "_blank");
-});
 els.doneBtn.addEventListener("click", () => game.skipToBoard());
 
 // ---------- message board ----------
