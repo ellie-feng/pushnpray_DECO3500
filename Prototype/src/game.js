@@ -7,6 +7,7 @@ import { DrawingCanvas } from "./canvas.js";
 import { NoteComposer, renderNoteThumbnail } from "./board.js";
 import { confirmDialog, showToast } from "./ui.js";
 import { drawQr } from "./qr.js";
+import { icon } from "./icons.js";
 
 const TURN_MS = 30000;
 // How fresh a heartbeat must be to count as "someone is using this station
@@ -39,14 +40,15 @@ const MAX_ZOOM = 2.5;
 const REPORT_HIDE_AT = 3;
 // The compliment drawer opens for the last stretch of the duet.
 const COMPLIMENT_WINDOW_MS = 30000;
-// Pre-loaded on purpose: no typing, nothing that can be abused.
+// Pre-loaded on purpose: no typing, nothing that can be abused. `icon` is a
+// Heroicon name; only `text` is sent to the partner.
 export const COMPLIMENTS = [
-  "Nice one! 👏",
-  "Love it! ❤️",
-  "So creative! 🎨",
-  "You're a star! ⭐",
-  "Great teamwork! 🤝",
-  "That's hilarious 😂",
+  { text: "Nice one!", icon: "hand-thumb-up" },
+  { text: "Love it!", icon: "heart" },
+  { text: "So creative!", icon: "sparkles" },
+  { text: "You're a star!", icon: "star" },
+  { text: "Great teamwork!", icon: "user-group" },
+  { text: "That's hilarious", icon: "face-smile" },
 ];
 
 let els = null;
@@ -511,7 +513,10 @@ function pickBoardPrompt(animate) {
 }
 
 function updateBoard() {
-  if (els.boardIcon) els.boardIcon.textContent = station.icon;
+  if (els.boardIcon && els.boardIcon.dataset.icon !== station.icon) {
+    els.boardIcon.dataset.icon = station.icon;
+    els.boardIcon.innerHTML = icon(station.icon);
+  }
   if (els.boardLabel) els.boardLabel.textContent = station.label;
 
   const other = role === "A" ? "B" : "A";
@@ -728,7 +733,7 @@ function renderBoardGrid() {
         const reports = typeof note.reports === "number" ? note.reports : 0;
         if (reports >= REPORT_HIDE_AT) {
           cell.classList.add("reported");
-          cell.innerHTML = '<div class="reported-icon">🚫</div><div>Hidden after community reports</div>';
+          cell.innerHTML = `<div class="reported-icon">${icon("no-symbol")}</div><div>Hidden after community reports</div>`;
           els.boardGrid.appendChild(cell);
         } else {
           cell.classList.add("filled");
@@ -745,7 +750,7 @@ function renderBoardGrid() {
           const hearts = typeof note.hearts === "number" ? note.hearts : 0;
           const heartBtn = document.createElement("button");
           heartBtn.className = "heart-btn" + (hearts > 0 ? " has-hearts" : "");
-          heartBtn.textContent = hearts > 0 ? `♥ ${hearts}` : "♡";
+          heartBtn.innerHTML = hearts > 0 ? `${icon("heart", { solid: true })}<span>${hearts}</span>` : icon("heart");
           heartBtn.title = "Love this drawing";
           if (popHeartKey === key) {
             heartBtn.classList.add("pop");
@@ -759,7 +764,7 @@ function renderBoardGrid() {
           cell.appendChild(heartBtn);
           const reportBtn = document.createElement("button");
           reportBtn.className = "report-btn";
-          reportBtn.textContent = "⚑ Report";
+          reportBtn.innerHTML = `${icon("flag")}<span>Report</span>`;
           reportBtn.title = "Report this drawing";
           reportBtn.addEventListener("click", (e) => {
             e.stopPropagation();
@@ -772,7 +777,7 @@ function renderBoardGrid() {
         cell.classList.add("empty");
         const plus = document.createElement("span");
         plus.className = "board-cell-plus";
-        plus.textContent = "+";
+        plus.innerHTML = icon("plus");
         cell.appendChild(plus);
         cell.addEventListener("click", () => {
           if (wasPan()) return;
@@ -993,7 +998,9 @@ function updateCompliments(now, totalLeft, solo) {
 
 function showCompliment(text, from) {
   const el = els.complimentBubble;
-  el.textContent = `💌 ${from}: ${text}`;
+  el.replaceChildren();
+  el.insertAdjacentHTML("afterbegin", icon("envelope"));
+  el.append(` ${from}: ${text}`); // partner-supplied text: appended as text, never parsed as HTML
   el.hidden = false;
   el.classList.remove("show"); // restart the pop-in if one is already showing
   void el.offsetWidth;
