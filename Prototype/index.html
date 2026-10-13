@@ -27,16 +27,18 @@
          empty cell opens it full-screen (see #compose-overlay) with the
          drawing tools; the grid itself is just for browsing. -->
     <section id="screen-board" class="screen" data-screen="board" hidden>
-      <div class="hud">
-        <div class="hud-word">
-          <span class="hud-word-emoji" id="board-icon"></span>
-          <span id="board-label"></span>
-        </div>
-        <button id="board-add-btn" class="btn btn-primary">+ Add</button>
-      </div>
-
+      <!-- No top bar: the station name, the question and "+ Add" share one row. -->
       <div class="board-prompt-banner">
+        <div class="banner-side">
+          <div class="hud-word">
+            <span class="hud-word-emoji" id="board-icon"></span>
+            <span id="board-label"></span>
+          </div>
+        </div>
         <div class="board-prompt" id="board-prompt-text">Loading&hellip;</div>
+        <div class="banner-side banner-side-right">
+          <button id="board-add-btn" class="btn btn-primary">+ Add</button>
+        </div>
       </div>
 
       <div class="play-body">

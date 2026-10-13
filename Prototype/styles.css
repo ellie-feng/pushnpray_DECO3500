@@ -574,10 +574,24 @@ body {
 }
 .board-prompt-banner {
   flex: 0 0 auto;
-  padding: 18px 32px 22px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 14px 24px;
   text-align: center;
   background: linear-gradient(135deg, #fff5e8, #ffeef0);
   border-bottom: 1px solid var(--line);
+}
+/* Equal-width sides keep the question truly centred between the station name
+   and the button. */
+.banner-side {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.banner-side-right {
+  justify-content: flex-end;
 }
 .board-prompt {
   font-size: 2rem;
@@ -1526,14 +1540,13 @@ h2,
 
 /* ---------- board ---------- */
 .board-prompt-banner {
-  background: var(--bg-soft);
+  background: var(--surface);
   border-bottom: 2px solid var(--ink);
 }
 .board-prompt {
+  flex: 0 1 auto;
   display: inline-block;
   font-size: 2.1rem;
-  padding: 0 0.3em;
-  background: linear-gradient(transparent 58%, var(--yellow) 58% 94%, transparent 94%);
 }
 .board-cell.filled {
   background: #fff;
