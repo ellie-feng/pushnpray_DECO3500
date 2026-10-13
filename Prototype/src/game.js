@@ -78,7 +78,6 @@ let myRedoStack = []; // strokes this device has undone, poppable to redo — cl
 let currentScreenName = null;
 let currentCanDraw = false;
 let lastServerState = null; // for detecting session.state edges (board -> lobby, etc.)
-let localLandingSeen = false; // per visit: has this device tapped past the landing splash yet
 let localMatchSeen = false; // per-round: has this device said yes to drawing with the other station yet
 let localOnboardingSeen = false; // per-round: has this device clicked through onboarding yet
 let alertTimer = null;
@@ -346,12 +345,6 @@ export function sendCompliment(text) {
   flashBanner(`Sent: ${text}`);
 }
 
-// Called when the landing splash is tapped — reveals the board itself for
-// the rest of this visit.
-export function confirmLanding() {
-  localLandingSeen = true;
-}
-
 // Leaving the finish screen early instead of waiting out FINISH_VIEW_MS.
 export function skipToBoard() {
   rt.returnToBoard();
@@ -393,7 +386,6 @@ function render() {
       }
       pickBoardPrompt(); // fresh prompt each time this station returns to idle
       boardScrolled = false; // re-center on what's already there, once, per visit
-      localLandingSeen = false; // show the attract splash again for the next visitor
     }
     if (state === "lobby") {
       localMatchSeen = false;
@@ -418,11 +410,7 @@ function render() {
     finishShown = false;
     lastTurnRole = null;
     lastTickSecond = null;
-    updateBoard(); // both-active trigger check runs regardless of the landing splash
-    if (!localLandingSeen) {
-      showScreen("landing");
-      return;
-    }
+    updateBoard();
     showScreen("board");
     return;
   }
@@ -816,7 +804,7 @@ function centerBoardView(minGX, minGY) {
 // position (targetGX, targetGY) — measured against a grid whose top-left
 // cell is (boundsMinGX, boundsMinGY), i.e. whatever renderBoardGrid() just
 // used — ends up centered in the viewport. Used both for "show me what's
-// already here" on landing and for the "+ Add" button jumping to an empty
+// already here" on arrival and for the "+ Add" button jumping to an empty
 // cell.
 function panToGridCell(targetGX, targetGY, boundsMinGX, boundsMinGY) {
   if (!els.boardViewport) return;

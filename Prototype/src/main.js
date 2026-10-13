@@ -1,4 +1,4 @@
-// Boot + all the plain-UI wiring: the landing splash, the message-board
+// Boot + all the plain-UI wiring: the message-board
 // screen (prompt, shared grid gallery), the single-page onboarding, the
 // press-and-hold ready button, and the duet toolbar. Game/timer/canvas
 // logic — including the grid itself — lives in game.js.
@@ -12,9 +12,6 @@ hydrateIcons();
 
 const els = {
   screens: document.querySelectorAll(".screen"),
-
-  // landing
-  screenLanding: document.getElementById("screen-landing"),
 
   // board
   boardIcon: document.getElementById("board-icon"),
@@ -322,16 +319,6 @@ els.composeSubmit.addEventListener("click", () => game.submitCompose());
 document.getElementById("screen-board").addEventListener("pointerdown", () => {
   game.unlockAudio();
   game.touchActive();
-});
-
-// ---------- landing (attract) screen ----------
-// Tapping it both reveals the board and counts as activity — someone
-// standing at the station interacting with it is "active" regardless of
-// which screen they're looking at.
-els.screenLanding.addEventListener("click", () => {
-  game.unlockAudio();
-  game.touchActive();
-  game.confirmLanding();
 });
 
 // ---------- boot ----------
