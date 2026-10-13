@@ -746,7 +746,7 @@ body {
   justify-content: center;
 }
 .board-cell.empty:active {
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--bg-soft); /* a soft yellow press — a white flash wouldn't show on white */
 }
 .board-cell.empty .board-cell-plus {
   font-size: 2.2rem;
@@ -1719,8 +1719,8 @@ h2,
   --tape: var(--peach);
 }
 .board-cell.empty {
-  border: 2px dashed rgba(38, 37, 45, 0.35);
-  background: rgba(255, 255, 255, 0.32);
+  border: 2px dashed rgba(46, 39, 69, 0.35);
+  background: #fff; /* unwritten notes stay plain white, with the plus sign */
 }
 .board-cell.empty .board-cell-plus {
   color: rgba(38, 37, 45, 0.55);
@@ -1729,26 +1729,7 @@ h2,
   background: var(--lavender);
   border: 2px dashed rgba(46, 39, 69, 0.3);
 }
-/* empty cells wear a rotating pastel (opaque: a translucent tint would mix with
-   the yellow paper beneath and go muddy) */
-.board-cell.empty:nth-child(5n + 1) {
-  background: #fcdcea;
-}
-.board-cell.empty:nth-child(5n + 2) {
-  background: #d6e9fa;
-}
-.board-cell.empty:nth-child(5n + 3) {
-  background: #cfece0;
-}
-.board-cell.empty:nth-child(5n + 4) {
-  background: #e4dbf8;
-}
-.board-cell.empty:nth-child(5n) {
-  background: #ffe0cb;
-}
-.board-cell.empty:active {
-  background: rgba(255, 255, 255, 0.8); /* tap feedback must beat the tints above */
-}
+
 .cell-caption {
   font-size: 0.8rem;
   font-weight: 700;
