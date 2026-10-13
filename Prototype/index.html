@@ -6,13 +6,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#fbf3e6">
+<meta name="theme-color" content="#ffd23f">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
   <div class="rotate-hint">
-    <div class="rotate-icon">↻</div>
+    <div class="rotate-icon" data-icon="arrow-path"></div>
     <p>Turn your iPad sideways to play</p>
   </div>
 
@@ -59,19 +62,19 @@
       <!-- COMPOSE — the tapped cell, enlarged to (almost) the whole screen -->
       <div class="compose-overlay" id="compose-overlay" hidden>
         <div class="compose-bar">
-          <button id="compose-exit" class="btn">✕ Exit</button>
+          <button id="compose-exit" class="btn"><span data-icon="x-mark"></span>Exit</button>
           <div class="compose-title" id="compose-title"></div>
           <button id="compose-submit" class="btn btn-primary" disabled>Submit</button>
         </div>
         <div class="compose-body">
           <div class="toolbar" id="note-toolbar">
           <div class="tool-grid">
-            <div class="tool"><button class="tool-btn active" data-tool="pen" title="Pen">✏️</button><span class="tool-label">Draw</span></div>
-            <div class="tool"><button class="tool-btn" data-tool="highlighter" title="Crayon / highlighter">🖍️</button><span class="tool-label">Highlight</span></div>
-            <div class="tool"><button class="tool-btn" data-tool="eraser" title="Eraser">🧼</button><span class="tool-label">Erase</span></div>
-            <div class="tool"><button class="tool-btn" data-tool="fill" title="Fill">🪣</button><span class="tool-label">Fill</span></div>
-            <div class="tool"><button class="tool-btn" id="note-undo-btn" title="Undo">↩️</button><span class="tool-label">Undo</span></div>
-            <div class="tool"><button class="tool-btn" id="note-redo-btn" title="Redo">↪️</button><span class="tool-label">Redo</span></div>
+            <div class="tool"><button class="tool-btn active" data-tool="pen" title="Pen"><span data-icon="pencil"></span></button><span class="tool-label">Draw</span></div>
+            <div class="tool"><button class="tool-btn" data-tool="highlighter" title="Crayon / highlighter"><span data-icon="paint-brush"></span></button><span class="tool-label">Highlight</span></div>
+            <div class="tool"><button class="tool-btn" data-tool="eraser" title="Eraser"><span data-icon="backspace"></span></button><span class="tool-label">Erase</span></div>
+            <div class="tool"><button class="tool-btn" data-tool="fill" title="Fill"><span data-icon="swatch"></span></button><span class="tool-label">Fill</span></div>
+            <div class="tool"><button class="tool-btn" id="note-undo-btn" title="Undo"><span data-icon="arrow-uturn-left"></span></button><span class="tool-label">Undo</span></div>
+            <div class="tool"><button class="tool-btn" id="note-redo-btn" title="Redo"><span data-icon="arrow-uturn-right"></span></button><span class="tool-label">Redo</span></div>
           </div>
           <div class="toolbar-sep"></div>
           <div class="swatches" id="note-swatches"></div>
@@ -93,9 +96,9 @@
 
     <!-- ALERT (both stations just became active) -->
     <section id="screen-alert" class="screen" data-screen="alert" hidden>
-      <button class="btn leave-btn" data-leave>← Back to board</button>
+      <button class="btn leave-btn" data-leave><span data-icon="arrow-left"></span>Back to board</button>
       <div class="center-card alert-card">
-        <div class="alert-icon">🍀</div>
+        <div class="alert-icon" data-icon="sparkles"></div>
         <h1>It's your lucky day!</h1>
         <p class="muted">A surprise bonus round just unlocked.</p>
       </div>
@@ -116,7 +119,7 @@
             <span class="match-dot d1"></span>
             <span class="match-dot d2"></span>
             <span class="match-dot d3"></span>
-            <span class="match-badge">🤝</span>
+            <span class="match-badge" data-icon="link"></span>
           </div>
           <div class="match-tablet match-them">
             <div class="match-screen" id="match-them-icon"></div>
@@ -136,14 +139,14 @@
          scene both players will draw, made as clear as possible, then
          straight to the ready screen. -->
     <section id="screen-onboarding" class="screen" data-screen="onboarding" hidden>
-      <button class="btn leave-btn" data-leave>← Back to board</button>
+      <button class="btn leave-btn" data-leave><span data-icon="arrow-left"></span>Back to board</button>
       <div class="ob-card" id="onboarding-card"></div>
       <button id="onboarding-next" class="btn btn-primary">Let's sketch</button>
     </section>
 
     <!-- LOBBY / READY -->
     <section id="screen-lobby" class="screen" data-screen="lobby" hidden>
-      <button class="btn leave-btn" data-leave>← Back to board</button>
+      <button class="btn leave-btn" data-leave><span data-icon="arrow-left"></span>Back to board</button>
       <div class="lobby-wrap">
         <div class="presence-row">
           <div class="presence-pill gone" id="pill-you"><span class="dot"></span>You</div>
@@ -162,7 +165,7 @@
 
     <!-- COUNTDOWN -->
     <section id="screen-countdown" class="screen" data-screen="countdown" hidden>
-      <button class="btn leave-btn" data-leave>← Back to board</button>
+      <button class="btn leave-btn" data-leave><span data-icon="arrow-left"></span>Back to board</button>
       <div class="countdown-number" id="countdown-number">3</div>
     </section>
 
@@ -177,18 +180,18 @@
           <div class="hud-total" id="hud-total">2:00</div>
           <div class="hud-turn" id="hud-turn"></div>
         </div>
-        <button id="exit-btn" class="btn exit-btn">✕ Exit</button>
+        <button id="exit-btn" class="btn exit-btn"><span data-icon="x-mark"></span>Exit</button>
       </div>
 
       <div class="play-body">
         <div class="toolbar" id="toolbar">
           <div class="tool-grid">
-            <div class="tool"><button class="tool-btn active" data-tool="pen" title="Pen">✏️</button><span class="tool-label">Draw</span></div>
-            <div class="tool"><button class="tool-btn" data-tool="highlighter" title="Crayon / highlighter">🖍️</button><span class="tool-label">Highlight</span></div>
-            <div class="tool"><button class="tool-btn" data-tool="eraser" title="Eraser">🧼</button><span class="tool-label">Erase</span></div>
-            <div class="tool"><button class="tool-btn" data-tool="fill" title="Fill">🪣</button><span class="tool-label">Fill</span></div>
-            <div class="tool"><button class="tool-btn" id="undo-btn" title="Undo">↩️</button><span class="tool-label">Undo</span></div>
-            <div class="tool"><button class="tool-btn" id="redo-btn" title="Redo">↪️</button><span class="tool-label">Redo</span></div>
+            <div class="tool"><button class="tool-btn active" data-tool="pen" title="Pen"><span data-icon="pencil"></span></button><span class="tool-label">Draw</span></div>
+            <div class="tool"><button class="tool-btn" data-tool="highlighter" title="Crayon / highlighter"><span data-icon="paint-brush"></span></button><span class="tool-label">Highlight</span></div>
+            <div class="tool"><button class="tool-btn" data-tool="eraser" title="Eraser"><span data-icon="backspace"></span></button><span class="tool-label">Erase</span></div>
+            <div class="tool"><button class="tool-btn" data-tool="fill" title="Fill"><span data-icon="swatch"></span></button><span class="tool-label">Fill</span></div>
+            <div class="tool"><button class="tool-btn" id="undo-btn" title="Undo"><span data-icon="arrow-uturn-left"></span></button><span class="tool-label">Undo</span></div>
+            <div class="tool"><button class="tool-btn" id="redo-btn" title="Redo"><span data-icon="arrow-uturn-right"></span></button><span class="tool-label">Redo</span></div>
           </div>
           <div class="toolbar-sep"></div>
           <div class="swatches" id="swatches"></div>
@@ -205,7 +208,7 @@
           <canvas id="canvas-live"></canvas>
           <div class="turn-banner" id="turn-banner"></div>
           <div class="lock-scrim" id="lock-scrim" hidden>
-            <div class="lock-icon">🔒</div>
+            <div class="lock-icon" data-icon="lock-closed" data-solid></div>
             <div id="lock-text">Watching</div>
           </div>
 
@@ -213,7 +216,7 @@
           <div class="compliment-bubble" id="compliment-bubble" hidden></div>
           <div class="compliment-dock" id="compliment-dock" hidden>
             <div class="compliment-list" id="compliment-list"></div>
-            <button id="compliment-toggle" class="btn btn-primary compliment-toggle">💌 Send a compliment</button>
+            <button id="compliment-toggle" class="btn btn-primary compliment-toggle"><span data-icon="envelope"></span>Send a compliment</button>
           </div>
         </div>
       </div>
@@ -222,7 +225,7 @@
     <!-- FINISH -->
     <section id="screen-finish" class="screen" data-screen="finish" hidden>
       <div class="center-card finish-card">
-        <h1>Pencils down! ✏️</h1>
+        <h1>Pencils down! <span class="title-icon" data-icon="pencil"></span></h1>
         <p class="muted">You made this drawing together:</p>
         <div class="reveal-row">
           <div class="reveal-item">
@@ -253,7 +256,7 @@
     <!-- SETUP HELP (missing/unknown ?station=) -->
     <section id="screen-setup" class="screen" data-screen="setup" hidden>
       <div class="center-card">
-        <h1>🖊️ Push'n'Pray</h1>
+        <h1><span class="title-icon" data-icon="pencil"></span> Push'n'Pray</h1>
         <p class="muted">This link doesn't say which station this iPad is. Add one of these to the URL:</p>
         <ul class="setup-list" id="setup-list"></ul>
       </div>

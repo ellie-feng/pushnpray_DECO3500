@@ -5,6 +5,10 @@
 import * as game from "./game.js";
 import { getStationFromUrl, STATIONS } from "./stations.js";
 import { confirmDialog } from "./ui.js";
+import { icon, hydrateIcons } from "./icons.js";
+
+// Fill in the static-HTML icon placeholders (<span data-icon="pencil">).
+hydrateIcons();
 
 const els = {
   screens: document.querySelectorAll(".screen"),
@@ -157,11 +161,12 @@ els.exitBtn.addEventListener("click", async () => {
 // and this can be filled in once at boot rather than per round.
 function renderMatch(station) {
   const other = Object.values(STATIONS).find((s) => s.duetRole !== station.duetRole);
-  els.matchYouIcon.textContent = station.icon;
+  els.matchYouIcon.innerHTML = icon(station.icon);
   els.matchYouLabel.textContent = `You · ${station.label}`;
-  els.matchThemIcon.textContent = other.icon;
+  els.matchThemIcon.innerHTML = icon(other.icon);
   els.matchThemLabel.textContent = other.label;
-  els.matchTitle.textContent = `Someone's at the ${other.label}! 👋`;
+  els.matchTitle.textContent = `Someone's at the ${other.label}! `;
+  els.matchTitle.insertAdjacentHTML("beforeend", `<span class="title-icon">${icon("hand-raised")}</span>`);
   els.matchText.textContent = `There's a real person at the ${other.label} right now. Wanna draw something together?`;
 }
 els.matchYes.addEventListener("click", () => game.confirmMatch());
@@ -170,17 +175,17 @@ els.matchNo.addEventListener("click", () => game.leaveRound());
 // ---------- onboarding: one page, the scene front and centre ----------
 function renderOnboarding() {
   const p = game.sharedPrompt();
-  const icon = p ? p.emoji : "🎨";
+  const sceneEmoji = p ? p.emoji : "";
   const scene = p ? p.word : "Loading your mission&hellip;";
   els.onboardingCard.innerHTML = `
-    <div class="ob-icon">${icon}</div>
+    <div class="ob-icon">${sceneEmoji}</div>
     <p class="ob-eyebrow">Your mission, should you choose to doodle it</p>
     <h2 class="ob-question">${scene}</h2>
     <ul class="ob-rules">
-      <li><span class="ob-rule-icon">🎨</span><span>One canvas, two artists. You're sketching this <strong>together</strong>, live.</span></li>
-      <li><span class="ob-rule-icon">⏱️</span><span>2 minutes, 30-second turns. Player 1 goes, then Player 2, then round again.</span></li>
-      <li><span class="ob-rule-icon">👀</span><span>Not your turn? Sit back and watch the magic happen.</span></li>
-      <li><span class="ob-rule-icon">💌</span><span>Last 30 seconds: send your partner some love.</span></li>
+      <li><span class="ob-rule-icon">${icon("paint-brush")}</span><span>One canvas, two artists. You're sketching this <strong>together</strong>, live.</span></li>
+      <li><span class="ob-rule-icon">${icon("clock")}</span><span>2 minutes, 30-second turns. Player 1 goes, then Player 2, then round again.</span></li>
+      <li><span class="ob-rule-icon">${icon("eye")}</span><span>Not your turn? Sit back and watch the magic happen.</span></li>
+      <li><span class="ob-rule-icon">${icon("envelope")}</span><span>Last 30 seconds: send your partner some love.</span></li>
     </ul>`;
 }
 
@@ -288,10 +293,10 @@ els.undoBtn.addEventListener("click", () => game.undo());
 els.redoBtn.addEventListener("click", () => game.redo());
 
 // ---------- compliments (final 30 seconds) ----------
-game.COMPLIMENTS.forEach((text) => {
+game.COMPLIMENTS.forEach(({ text, icon: iconName }) => {
   const chip = document.createElement("button");
   chip.className = "btn compliment-chip";
-  chip.textContent = text;
+  chip.innerHTML = `${icon(iconName)}<span>${text}</span>`;
   chip.addEventListener("click", () => game.sendCompliment(text));
   els.complimentList.appendChild(chip);
 });

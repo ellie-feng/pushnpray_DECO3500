@@ -1,3 +1,5 @@
+// `icon` is the name of a Heroicon (see icons.js), not an emoji.
+//
 // Each iPad is permanently dedicated to one physical spot, chosen by a URL
 // parameter (e.g. index.html?station=microwave) rather than by who opens
 // the link first — there's no claiming/racing involved any more. Bookmark
@@ -5,7 +7,7 @@
 export const STATIONS = {
   microwave: {
     label: "Microwave",
-    icon: "🍽️",
+    icon: "fire",
     duetRole: "A",
     prompts: [
       "What's for lunch?",
@@ -18,7 +20,7 @@ export const STATIONS = {
   },
   printer: {
     label: "Printer",
-    icon: "🖨️",
+    icon: "printer",
     duetRole: "B",
     // Asked about what people are up to in the library, not the printing
     // itself — the printer sits where people study, read, snack and play.

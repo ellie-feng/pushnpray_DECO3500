@@ -4,21 +4,30 @@
 <meta charset="UTF-8">
 <title>Your drawing · Push'n'Pray</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#fbf3e6">
+<meta name="theme-color" content="#ffd23f">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
 <meta name="robots" content="noindex">
 <style>
   :root {
-    --bg: #fbf3e6;
-    --ink: #232733;
-    --muted: #767b8a;
-    --accent: #ff5a5f;
-    --line: #e7e0d2;
+    --bg: #fff1a1;
+    --surface: #fffdf2;
+    --ink: #26252d;
+    --muted: #6e6a5c;
+    --yellow: #ffd23f;
+    --line: #e2cc6b;
+    --hand: "Patrick Hand", "Bradley Hand", "Chalkboard SE", "Comic Sans MS", cursive;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     min-height: 100vh;
-    background: var(--bg);
+    /* the same ruled yellow notepad page as the app */
+    background:
+      linear-gradient(to right, transparent 27px, rgba(229, 72, 77, 0.5) 27px, rgba(229, 72, 77, 0.5) 29px, transparent 29px),
+      repeating-linear-gradient(to bottom, transparent 0, transparent 35px, rgba(61, 111, 216, 0.22) 35px, rgba(61, 111, 216, 0.22) 36px),
+      var(--bg);
     color: var(--ink);
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
     display: flex;
@@ -30,30 +39,54 @@
     max-width: 560px;
     text-align: center;
   }
-  .brand { font-weight: 800; letter-spacing: 0.02em; color: var(--muted); margin: 8px 0 4px; }
-  h1 { font-size: 1.5rem; margin: 0 0 4px; line-height: 1.2; }
-  .sub { color: var(--muted); margin: 0 0 20px; }
+  .brand { font-family: var(--hand); font-size: 1.2rem; letter-spacing: 0.02em; color: var(--muted); margin: 8px 0 4px; }
+  h1 {
+    font-family: var(--hand);
+    font-weight: 400;
+    font-size: 2rem;
+    margin: 0 0 4px;
+    line-height: 1.2;
+    display: inline-block;
+    padding: 0 0.25em;
+    background: linear-gradient(transparent 60%, var(--yellow) 60% 92%, transparent 92%);
+  }
+  .sub { color: var(--muted); margin: 6px 0 22px; }
   .frame {
+    position: relative;
     background: #fff;
-    border-radius: 16px;
-    box-shadow: 0 10px 30px rgba(35, 39, 51, 0.1);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    box-shadow: 0 8px 22px rgba(120, 90, 0, 0.16);
     padding: 8px;
     min-height: 120px;
     display: flex;
     align-items: center;
     justify-content: center;
   }
-  .frame img { width: 100%; height: auto; border-radius: 10px; display: block; }
+  .frame::before {
+    content: "";
+    position: absolute;
+    top: -13px;
+    left: 50%;
+    width: 100px;
+    height: 26px;
+    margin-left: -50px;
+    background: rgba(255, 210, 63, 0.85);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+    transform: rotate(-2.5deg);
+  }
+  .frame img { width: 100%; height: auto; display: block; }
   .btn {
     display: inline-block;
     margin-top: 20px;
-    background: var(--accent);
-    color: #fff;
-    border: 0;
+    background: var(--yellow);
+    color: var(--ink);
+    border: 2px solid var(--ink);
+    box-shadow: 0 3px 0 var(--ink);
     border-radius: 999px;
-    padding: 14px 32px;
-    font-size: 1.05rem;
-    font-weight: 700;
+    padding: 12px 32px;
+    font-family: var(--hand);
+    font-size: 1.35rem;
     text-decoration: none;
   }
   .hint { color: var(--muted); font-size: 0.9rem; margin-top: 14px; line-height: 1.4; }

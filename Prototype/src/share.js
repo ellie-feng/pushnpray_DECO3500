@@ -36,7 +36,7 @@ async function main() {
   }
 
   if (typeof share.prompt === "string" && share.prompt) {
-    els.title.textContent = `${share.emoji || "🎨"} ${share.prompt}`;
+    els.title.textContent = `${share.emoji ? share.emoji + " " : ""}${share.prompt}`;
   }
   els.img.src = share.img;
   els.img.hidden = false;
