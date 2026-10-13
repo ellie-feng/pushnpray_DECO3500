@@ -556,112 +556,6 @@ body {
   margin-top: 16px;
 }
 
-/* ---------- landing (attract) screen ----------
-   Colourful but soft — blurred pastel blobs and a gentle float/pulse,
-   not a hard-saturated "look at me" screen. */
-#screen-landing {
-  /* Not `position: relative` — .screen already sets position:absolute,
-     which is just as valid a containing block for the absolutely
-     positioned blobs below, and this ID selector would otherwise beat
-     that class rule's specificity and collapse the screen out of its
-     full-size positioning (it would size to content and sit at the top
-     instead of filling/centering in the viewport). */
-  overflow: hidden;
-  background: linear-gradient(160deg, #fff6ea 0%, #ffeef2 45%, #f1eaff 100%);
-  cursor: pointer;
-}
-.landing-blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(46px);
-  opacity: 0.5;
-  animation: blob-float 7s ease-in-out infinite;
-}
-.blob-1 {
-  width: 260px;
-  height: 260px;
-  background: #ffd23f;
-  top: -60px;
-  left: -40px;
-}
-.blob-2 {
-  width: 320px;
-  height: 320px;
-  background: #ff8fd6;
-  bottom: -80px;
-  right: -60px;
-  animation-delay: 1.2s;
-}
-.blob-3 {
-  width: 220px;
-  height: 220px;
-  background: #4d96ff;
-  bottom: 10%;
-  left: 8%;
-  animation-delay: 2.4s;
-}
-.blob-4 {
-  width: 200px;
-  height: 200px;
-  background: #3ddc84;
-  top: 12%;
-  right: 12%;
-  animation-delay: 3.6s;
-}
-@keyframes blob-float {
-  0%,
-  100% {
-    transform: translateY(0) scale(1);
-  }
-  50% {
-    transform: translateY(-24px) scale(1.06);
-  }
-}
-.landing-wrap {
-  position: relative;
-  z-index: 1;
-  text-align: center;
-}
-.landing-title {
-  font-size: 4.2rem;
-  font-weight: 800;
-  line-height: 1.1;
-  margin: 0 0 16px;
-  color: var(--ink);
-  animation: landing-float 3.2s ease-in-out infinite;
-}
-.landing-tagline {
-  font-size: 2rem;
-  font-weight: 800;
-  margin: 0 0 26px;
-  color: var(--ink);
-}
-.landing-subtitle {
-  font-size: 1.3rem;
-  font-weight: 700;
-  color: var(--ink);
-  letter-spacing: 0.02em;
-  animation: landing-pulse 1.8s ease-in-out infinite;
-}
-@keyframes landing-float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-14px);
-  }
-}
-@keyframes landing-pulse {
-  0%,
-  100% {
-    opacity: 0.6;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
 /* ---------- message board: shared infinite canvas ----------
    Deliberately reuses .hud / .play-body / .toolbar from the
    drawing-together screen (below) rather than a bespoke layout — same
@@ -1397,8 +1291,6 @@ body::before {
 /* ---------- type: heavy soft serif for headings, clean sans for the rest ---------- */
 h1,
 h2,
-.landing-title,
-.landing-tagline,
 .countdown-number,
 .ob-question,
 .reveal-word,
@@ -1630,44 +1522,6 @@ h2,
   font-size: 0.95rem;
   font-weight: 700;
   color: var(--ink);
-}
-
-/* ---------- landing: the notepad page with soft pastel glows ---------- */
-#screen-landing {
-  background: none;
-}
-.landing-blob {
-  opacity: 0.8;
-}
-.blob-1 {
-  background: var(--butter);
-}
-.blob-2 {
-  background: var(--pink);
-}
-.blob-3 {
-  background: var(--blue);
-}
-.blob-4 {
-  background: var(--mint);
-}
-.landing-title {
-  display: inline-block;
-  font-size: 5.6rem;
-  padding: 0 0.22em;
-  background: linear-gradient(transparent 62%, var(--yellow-deep) 62% 92%, transparent 92%);
-}
-.landing-tagline {
-  position: relative; /* keeps it above the glow blobs, which are positioned */
-  font-size: 2rem;
-  margin: 12px 0 26px;
-}
-.landing-subtitle {
-  font-family: var(--sans);
-  font-size: 1.3rem;
-  font-weight: 700;
-  color: var(--ink);
-  opacity: 0.75;
 }
 
 /* ---------- board ---------- */
