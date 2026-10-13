@@ -7,15 +7,15 @@
   --surface: #fffbf3; /* cream sheets/cards that sit on the paper */
   --ink: #2e2745; /* purple-navy, used for all text and outlines */
   --muted: #5f587a;
-  --yellow: #ffd23f; /* marker yellow: primary buttons, highlighter */
-  --yellow-deep: #f2b705; /* darker yellow, for strokes that must show on cream */
+  --yellow: #ffe193; /* soft pastel yellow: buttons, highlighter, tape */
+  --yellow-deep: #f7d46a; /* a notch deeper, for strokes that must show on cream */
   --lavender: #cdbef2;
   --butter: #ffe193;
   --mint: #a8ddc6;
   --peach: #ffc7a0;
   --pink: #f9c0d9;
   --blue: #b5d6f5;
-  --accent: #ffd23f; /* action fill — always paired with --ink text */
+  --accent: #ffe193; /* action fill — always paired with --ink text */
   --accent-2: #3d6fd8; /* pen blue (ruled lines, links) */
   --pen-red: #e5484d; /* margin line, hearts, danger */
   --good: #2fbf71;
@@ -1395,7 +1395,7 @@ h2,
   width: 120px;
   height: 30px;
   margin-left: -60px;
-  background: rgba(255, 210, 63, 0.8);
+  background: rgba(255, 225, 147, 0.92);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
   transform: rotate(-2.5deg);
 }
