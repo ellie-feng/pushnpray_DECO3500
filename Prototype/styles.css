@@ -677,6 +677,11 @@ body {
 .reported-icon {
   font-size: 2rem;
 }
+.reported-note {
+  font-size: 0.78rem;
+  font-weight: 600;
+  opacity: 0.75;
+}
 /* The question a drawing was answering, along the bottom of its box. */
 .cell-caption {
   position: absolute;

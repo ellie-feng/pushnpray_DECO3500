@@ -279,6 +279,20 @@ export async function reportNote(stationId, cellKey) {
   });
 }
 
+// Erases a hidden note so its box is free to use again. It's a transaction
+// that re-checks the note is *still* hidden at the moment of deletion, so a
+// stale device can never erase a fresh drawing someone has since put in that
+// same box after it was cleared.
+export async function clearHiddenNote(stationId, cellKey, threshold) {
+  await runTransaction(ref(db, `trails/${stationId}/notes/${cellKey}`), (current) => {
+    // Nothing in the local cache (or already gone): returning null (a no-op
+    // write) makes the server send its real copy back and re-run this.
+    if (current === null) return null;
+    if (typeof current.reports === "number" && current.reports >= threshold) return null; // erase
+    return; // abort: not (or no longer) a hidden note
+  });
+}
+
 export function watchTrail(stationId, cb) {
   onValue(ref(db, `trails/${stationId}/notes`), (snap) => {
     cb(snap.val() || {});

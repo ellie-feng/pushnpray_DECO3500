@@ -156,7 +156,10 @@ export async function init(domEls, stationConfig) {
     // A new box (anyone's) means a new question. Only a rise in the count
     // counts: the first snapshot isn't a new box, and neither is a removal.
     const noteCount = Object.keys(notes).filter((k) => parseCellKey(k)).length;
-    if (prevNoteCount !== null && noteCount > prevNoteCount) pickBoardPrompt(true);
+    if (prevNoteCount !== null && noteCount > prevNoteCount) {
+      pickBoardPrompt(true);
+      clearHiddenNotes();
+    }
     prevNoteCount = noteCount;
     // Someone else filled the very cell this device is drawing into. (Not
     // when it's our own submit landing — Firebase reports that write to
@@ -385,6 +388,8 @@ function render() {
         showToast("Your partner left the round — back to the board.");
       }
       pickBoardPrompt(); // fresh prompt each time this station returns to idle
+      // Coming back from a duet is a prompt change too (a plain page reload isn't).
+      if (lastServerState && lastServerState !== "board") clearHiddenNotes();
       boardScrolled = false; // re-center on what's already there, once, per visit
     }
     if (state === "lobby") {
@@ -578,6 +583,20 @@ function findFirstEmptyCell() {
   return { gx: 0, gy: 0 };
 }
 
+// Whenever the board's question changes, drawings that were hidden by
+// community reports are erased for good and their boxes become free again.
+// Until then they stay as the "hidden" placeholder, which is the signal that
+// the report went through.
+function clearHiddenNotes() {
+  for (const [key, note] of Object.entries(boardNotes)) {
+    if (!parseCellKey(key)) continue;
+    const reports = typeof note.reports === "number" ? note.reports : 0;
+    if (reports >= REPORT_HIDE_AT) {
+      rt.clearHiddenNote(station.id, key, REPORT_HIDE_AT).catch(() => {});
+    }
+  }
+}
+
 function cellKeyOf(gx, gy) {
   return `${gx}_${gy}`;
 }
@@ -721,7 +740,7 @@ function renderBoardGrid() {
         const reports = typeof note.reports === "number" ? note.reports : 0;
         if (reports >= REPORT_HIDE_AT) {
           cell.classList.add("reported");
-          cell.innerHTML = `<div class="reported-icon">${icon("no-symbol")}</div><div>Hidden after community reports</div>`;
+          cell.innerHTML = `<div class="reported-icon">${icon("no-symbol")}</div><div>Hidden after community reports</div><div class="reported-note">This box frees up when the next drawing is added</div>`;
           els.boardGrid.appendChild(cell);
         } else {
           cell.classList.add("filled");
