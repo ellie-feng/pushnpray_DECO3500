@@ -1310,6 +1310,7 @@ body::before {
 /* ---------- type: heavy soft serif for headings, clean sans for the rest ---------- */
 h1,
 h2,
+.landing-title,
 .countdown-number,
 .ob-question,
 .reveal-word,
@@ -1683,6 +1684,157 @@ h2,
 }
 .compliment-chip:nth-child(6) {
   background: var(--peach);
+}
+
+/* ---------- splash: a taped note card among floating sticky notes ---------- */
+#screen-landing {
+  overflow: hidden;
+  cursor: pointer;
+}
+.landing-card {
+  z-index: 1;
+  max-width: 720px;
+  padding: 44px 64px 40px;
+  animation: landing-float 4s ease-in-out infinite;
+}
+.landing-badge {
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: var(--pink);
+  border: 2px solid var(--ink);
+  box-shadow: 0 4px 0 var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.landing-badge .icon {
+  width: 44px;
+  height: 44px;
+}
+.landing-title {
+  margin: 0 0 18px;
+  font-size: 3.7rem;
+  line-height: 1.12;
+}
+/* the highlighter runs behind the words, and wraps with them */
+.landing-hl {
+  background: linear-gradient(transparent 60%, var(--yellow-deep) 60% 92%, transparent 92%);
+  padding: 0 0.12em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.landing-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 30px;
+  padding: 9px 22px;
+  background: var(--lavender);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 0 3px 0 var(--ink);
+  font-family: var(--sans);
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+.landing-sub .icon {
+  width: 1.3em;
+  height: 1.3em;
+}
+.landing-cta {
+  display: block;
+  width: max-content;
+  margin: 0 auto;
+  padding: 14px 40px;
+  font-size: 1.25rem;
+  pointer-events: none; /* the whole screen is the button */
+  animation: landing-pulse 1.9s ease-in-out infinite;
+}
+@keyframes landing-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+@keyframes landing-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+/* sticky notes tilted around the card, each with its own pastel and bob */
+.landing-note {
+  position: absolute;
+  z-index: 0;
+  width: 128px;
+  height: 128px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  animation: note-bob 5s ease-in-out infinite;
+}
+.landing-note::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 56px;
+  height: 20px;
+  margin-left: -28px;
+  background: var(--yellow);
+  opacity: 0.92;
+  transform: rotate(-3deg);
+}
+.landing-note .icon {
+  width: 52px;
+  height: 52px;
+  color: var(--ink);
+}
+.landing-note.n1 {
+  left: 6%;
+  top: 11%;
+  background: var(--pink);
+  --tilt: -9deg;
+}
+.landing-note.n2 {
+  right: 7%;
+  top: 9%;
+  background: var(--blue);
+  --tilt: 8deg;
+  animation-delay: -1.2s;
+}
+.landing-note.n3 {
+  left: 8%;
+  bottom: 12%;
+  background: var(--mint);
+  --tilt: 7deg;
+  animation-delay: -2.4s;
+}
+.landing-note.n4 {
+  right: 6%;
+  bottom: 13%;
+  background: var(--peach);
+  --tilt: -7deg;
+  animation-delay: -3.6s;
+}
+@keyframes note-bob {
+  0%,
+  100% {
+    transform: rotate(var(--tilt)) translateY(0);
+  }
+  50% {
+    transform: rotate(calc(var(--tilt) + 2deg)) translateY(-12px);
+  }
 }
 
 /* ---------- rotate hint ---------- */

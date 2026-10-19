@@ -78,6 +78,7 @@ let myRedoStack = []; // strokes this device has undone, poppable to redo — cl
 let currentScreenName = null;
 let currentCanDraw = false;
 let lastServerState = null; // for detecting session.state edges (board -> lobby, etc.)
+let localLandingSeen = false; // per visit: has this device tapped past the landing splash yet
 let localMatchSeen = false; // per-round: has this device said yes to drawing with the other station yet
 let localOnboardingSeen = false; // per-round: has this device clicked through onboarding yet
 let alertTimer = null;
@@ -96,6 +97,7 @@ let lastComplimentT = null; // t of the latest partner compliment already shown
 let lastComplimentSentAt = 0;
 let shareRun = 0; // bumped per finish screen so a slow upload can't paint a stale QR
 let complimentBubbleTimeout = null;
+let splashHeadline = ""; // the splash's current headline, so the next visit never repeats it
 let boardPrompt = ""; // the question currently shown on the board — changes every time a box is added
 let composePrompt = ""; // the question the box being drawn right now is answering (fixed when it was opened)
 let prevNoteCount = null; // notes seen in the previous snapshot, to spot a new box being added
@@ -110,6 +112,8 @@ export async function init(domEls, stationConfig) {
   els = domEls;
   station = stationConfig;
   role = station.duetRole;
+  els.landingBadge.innerHTML = icon(station.icon);
+  pickSplashHeadline();
 
   canvasEngine = new DrawingCanvas(els.canvasBase, els.canvasLive, {
     canDraw: () => currentCanDraw,
@@ -348,6 +352,12 @@ export function sendCompliment(text) {
   flashBanner(`Sent: ${text}`);
 }
 
+// Called when the landing splash is tapped — reveals the board itself for
+// the rest of this visit.
+export function confirmLanding() {
+  localLandingSeen = true;
+}
+
 // Leaving the finish screen early instead of waiting out FINISH_VIEW_MS.
 export function skipToBoard() {
   rt.returnToBoard();
@@ -391,6 +401,8 @@ function render() {
       // Coming back from a duet is a prompt change too (a plain page reload isn't).
       if (lastServerState && lastServerState !== "board") clearHiddenNotes();
       boardScrolled = false; // re-center on what's already there, once, per visit
+      localLandingSeen = false; // show the attract splash again for the next visitor
+      pickSplashHeadline();
     }
     if (state === "lobby") {
       localMatchSeen = false;
@@ -415,7 +427,11 @@ function render() {
     finishShown = false;
     lastTurnRole = null;
     lastTickSecond = null;
-    updateBoard();
+    updateBoard(); // both-active trigger check runs regardless of the landing splash
+    if (!localLandingSeen) {
+      showScreen("landing");
+      return;
+    }
     showScreen("board");
     return;
   }
@@ -486,6 +502,16 @@ function roleName(r) {
 function isActive(p) {
   if (!p || typeof p.lastActive !== "number") return false;
   return rt.serverNow() - p.lastActive < ACTIVE_WINDOW_MS;
+}
+
+// The splash alternates between a headline for this spot (waiting for your
+// food / waiting to print) and a general one, and never shows the same one
+// twice running.
+const SPLASH_GENERAL = "Had a long day?";
+function pickSplashHeadline() {
+  const options = [station.splash, SPLASH_GENERAL].filter((h) => h && h !== splashHeadline);
+  splashHeadline = options[Math.floor(Math.random() * options.length)] || SPLASH_GENERAL;
+  els.landingTitle.textContent = splashHeadline;
 }
 
 // Picks a prompt for the board, never the one already showing. `animate` is
@@ -823,7 +849,7 @@ function centerBoardView(minGX, minGY) {
 // position (targetGX, targetGY) — measured against a grid whose top-left
 // cell is (boundsMinGX, boundsMinGY), i.e. whatever renderBoardGrid() just
 // used — ends up centered in the viewport. Used both for "show me what's
-// already here" on arrival and for the "+ Add" button jumping to an empty
+// already here" on landing and for the "+ Add" button jumping to an empty
 // cell.
 function panToGridCell(targetGX, targetGY, boundsMinGX, boundsMinGY) {
   if (!els.boardViewport) return;
