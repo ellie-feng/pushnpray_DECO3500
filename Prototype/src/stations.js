@@ -8,6 +8,9 @@ export const STATIONS = {
   microwave: {
     label: "Microwave",
     icon: "fire",
+    // Splash headline specific to this spot (the splash alternates it with a
+    // general one, see game.js).
+    splash: "Waiting for your food?",
     duetRole: "A",
     prompts: [
       "What's for lunch?",
@@ -21,6 +24,7 @@ export const STATIONS = {
   printer: {
     label: "Printer",
     icon: "printer",
+    splash: "Waiting to print?",
     duetRole: "B",
     // Asked about what people are up to in the library, not the printing
     // itself — the printer sits where people study, read, snack and play.

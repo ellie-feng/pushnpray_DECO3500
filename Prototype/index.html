@@ -21,6 +21,22 @@
 
   <main id="app">
 
+    <!-- SPLASH (attract screen — shown each time this station goes idle, before
+         revealing the board itself). A taped note card, surrounded by sticky
+         notes; the headline and icon are filled in per station by game.js. -->
+    <section id="screen-landing" class="screen" data-screen="landing">
+      <div class="landing-note n1" data-icon="heart"></div>
+      <div class="landing-note n2" data-icon="sparkles"></div>
+      <div class="landing-note n3" data-icon="pencil"></div>
+      <div class="landing-note n4" data-icon="star"></div>
+      <div class="center-card landing-card">
+        <div class="landing-badge" id="landing-badge"></div>
+        <h1 class="landing-title"><span class="landing-hl" id="landing-title">Had a long day?</span></h1>
+        <p class="landing-sub"><span data-icon="pencil"></span>Sketch and chill for 2 mins</p>
+        <div class="btn btn-primary landing-cta">Tap to start</div>
+      </div>
+    </section>
+
     <!-- MESSAGE BOARD — a shared infinite canvas: everyone's answers live
          on one big grid you can pan and pinch-zoom around, and a new one
          can go in any empty cell — never over an existing one. Tapping an
