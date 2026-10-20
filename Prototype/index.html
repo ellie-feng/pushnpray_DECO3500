@@ -10,7 +10,60 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,900,100&family=Figtree:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<!-- Versioned loading. GitHub Pages tells browsers to keep every file for 10
+     minutes, and each file is cached on its own, so right after a deploy a
+     device can end up with the NEW page but an OLD script or stylesheet (broken
+     layout, missing features). This asks the server which deploy is current
+     (every file in a deploy shares one Last-Modified) and requests each file as
+     ?v=<that>, so a new deploy always means new URLs and mixed versions can't
+     happen. If anything here fails it falls back to plain URLs.
+     When you add a module under src/, add it to MODULES below. -->
+<style>
+  html { background: #fff4b3; }
+  html:not(.ready) body { visibility: hidden; }
+</style>
+<script>
+(function () {
+  var MODULES = ["board.js", "canvas.js", "firebase-config.js", "floodfill.js", "game.js", "icons.js", "main.js", "prompts.js", "qr.js", "realtime.js", "stations.js", "ui.js"];
+  var started = false;
+  function start(v) {
+    if (started) return;
+    started = true;
+    var q = v ? "?v=" + v : "";
+    var link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "styles.css" + q;
+    function ready() { document.documentElement.classList.add("ready"); }
+    link.onload = ready;
+    link.onerror = ready;
+    setTimeout(ready, 3000);
+    document.head.appendChild(link);
+    // The modules read the page as soon as they run, so wait until it is parsed.
+    function run() {
+      // The import map makes the modules' own imports carry the version too.
+      if (v && typeof HTMLScriptElement.supports === "function" && HTMLScriptElement.supports("importmap")) {
+        var imports = {};
+        MODULES.forEach(function (m) { imports["./src/" + m] = "./src/" + m + q; });
+        var map = document.createElement("script");
+        map.type = "importmap";
+        map.textContent = JSON.stringify({ imports: imports });
+        document.head.appendChild(map);
+      }
+      var entry = document.createElement("script");
+      entry.type = "module";
+      entry.src = "src/main.js" + q;
+      document.head.appendChild(entry);
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
+    else run();
+  }
+  var timer = setTimeout(function () { start(""); }, 2500); // never hold the app hostage to a slow request
+  fetch(location.href, { method: "HEAD", cache: "no-store" })
+    .then(function (r) { return (r.headers.get("last-modified") || r.headers.get("etag") || "").replace(/[^a-z0-9]/gi, ""); })
+    .catch(function () { return ""; })
+    .then(function (v) { clearTimeout(timer); start(v); });
+})();
+</script>
 </head>
 <body>
 
@@ -280,6 +333,5 @@
 
   </main>
 
-  <script type="module" src="src/main.js"></script>
 </body>
 </html>
