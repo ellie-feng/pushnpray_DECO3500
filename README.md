@@ -79,7 +79,7 @@ pushnpray_DECO3500/
 * Prototype:   
   * [https\://ellie-feng.github.io/pushnpray\_DECO3500/Prototype/index.html?station=printer](https://ellie-feng.github.io/pushnpray_DECO3500/Prototype/index.html?station=printer)  
   * [https\://ellie-feng.github.io/pushnpray\_DECO3500/Prototype/index.html?station=microwave](https://ellie-feng.github.io/pushnpray_DECO3500/Prototype/index.html?station=microwave)
-  * Google Drive (identical to GitHub): [https://drive.google.com/drive/folders/15n4s01HUG-IWcYa6mOUB0FYncmP96WHY?usp=drive_link)
+* Google Drive (identical to GitHub): https://drive.google.com/drive/folders/15n4s01HUG-IWcYa6mOUB0FYncmP96WHY?usp=drive_link
 
 ## Running the prototype
 
