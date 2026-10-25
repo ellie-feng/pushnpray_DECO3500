@@ -73,6 +73,13 @@ pushnpray_DECO3500/
 - **Wiki_Pages** — space reserved for a design overview and ethical considerations
   write-up (currently placeholders).
 
+## Important Links
+
+* Poster: [https\://www\.figma.com/design/TOC7FblF76KkeeZDGilEFy/DECO3500?node-id=165-26\&t=34he9NMk0y4m5SNw-1](https://www.figma.com/design/TOC7FblF76KkeeZDGilEFy/DECO3500?node-id=165-26&t=34he9NMk0y4m5SNw-1)  
+* Prototype:   
+  * [https\://ellie-feng.github.io/pushnpray\_DECO3500/Prototype/index.html?station=printer](https://ellie-feng.github.io/pushnpray_DECO3500/Prototype/index.html?station=printer)  
+  * [https\://ellie-feng.github.io/pushnpray\_DECO3500/Prototype/index.html?station=microwave](https://ellie-feng.github.io/pushnpray_DECO3500/Prototype/index.html?station=microwave)
+
 ## Running the prototype
 
 The prototype needs no build step — it's plain HTML/CSS/JS modules.
