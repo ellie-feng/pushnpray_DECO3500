@@ -220,3 +220,26 @@ See [Wiki_Pages/Ethical_Considerations.md](Wiki_Pages/Ethical_Considerations.md)
 | Bianca | Domain research, preliminary and secondary interviews, interview transcript collation, analysis, and evaluation, Google Drive/GitHub documentation and organisation including planning and organising meeting minutes, Design Process Overview, pitch script, Tradeshow Poster |
 | Emily | Ethical Considerations Wiki, Preliminary and secondary interviews with 4 participants, Facilitating 4 testing sessions, Poster Design, content and execution. Future design opportunities. |
 | Reyana | Domain research, Preliminary and secondary interviews, Real-World Testing with 1 Participant, Analysis & Evaluation, Assisting Testing Sessions, Tradeshow Poster |
+
+## AI Acknowledgement
+**Tool:** Claude (Anthropic), used through Claude Code, by Ellie, for the functional prototype and the repository README.
+
+### Prototype (code)
+Claude wrote and revised the prototype code, working from design decisions and requests made by the team after user testing. The team decided what to build; Claude implemented it.
+
+- **Core build:** the two-station app (static HTML/CSS/JS on GitHub Pages with Firebase Realtime Database): the message board, the synced live-drawing game with turn-taking and a timer, the drawing tools (pen, highlighter, eraser, fill, undo/redo), and the saved-image QR code.
+- **Changes made after testing:** the scrollable, zoomable grid, exit buttons between states, the community report button, hearts, the "someone's at the other tablet" animation, compliments in the final 30 seconds, and both people getting the same prompt.
+- **Visual design:** implementing the splash screen, the yellow notepad look, the pastel palette sampled from the team's reference image, the fonts, and Heroicons in place of emoji.
+- **Bug fixing and testing:** diagnosing problems (for example stale cached files mixing old and new versions after a deploy), and checking changes in a browser and against the Firebase database before merging.
+- **Git workflow:** commits, pull requests and merges, each approved by Ellie.
+
+### Documentation
+- **README:** Claude drafted it as a summary of the team's Design Process Overview, using that document's own wording, and linked the repository's files.
+- **Interface copy:** Claude drafted some wording (for example the onboarding text and the compliment messages), which the team reviewed and edited. The team supplied the prompts, such as "snail on a train" and the library-themed printer questions.
+
+### Human work (no AI involvement known)
+Domain research, interviews, probes, testing sessions, analysis, the Ethical Considerations wiki, the poster and the pitch were done by the team. *(Add here if any AI tool was used for these.)*
+
+### Checks and limits
+- A person reviewed and approved every change before merge. Publishing the Firebase security rules was done manually by the team.
+- AI-written code was tested in a desktop browser. Some fixes, such as the cache fix, were not tested on a real iPad.
