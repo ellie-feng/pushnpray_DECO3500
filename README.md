@@ -18,7 +18,7 @@ Our domain is serendipitous connections on campus. We designed two drawing table
 - **Prototype:**
   - [Printer station](https://ellie-feng.github.io/pushnpray_DECO3500/Prototype/index.html?station=printer)
   - [Microwave station](https://ellie-feng.github.io/pushnpray_DECO3500/Prototype/index.html?station=microwave)
-- **Design Process Overview:** [Design_Project_Sequence/Design Process Overview.docx](Design_Project_Sequence/Design%20Process%20Overview.docx)
+- **Design Process Overview:** [Design_Project_Sequence/Design Process Overview.docx](Design_Project_Sequence/Design%20Process%20Overview.docx) · [wiki page (PDF)](Wiki_Pages/Design%20Process%20Overview.pdf)
 - **Ethical Considerations:** [Wiki_Pages/Ethical_Considerations.md](Wiki_Pages/Ethical_Considerations.md)
 - **Google Drive** (identical to this repo): [folder](https://drive.google.com/drive/folders/15n4s01HUG-IWcYa6mOUB0FYncmP96WHY?usp=drive_link)
 
@@ -194,7 +194,7 @@ Click through to any folder or document below. (`.docx` and `.pptx` files downlo
 - **[Meeting_Minutes/](Meeting_Minutes)** — weekly team meeting notes: [Week 3](Meeting_Minutes/Week%203_%2016_08%20Sunday.docx) · [Week 4](Meeting_Minutes/Week%204_%2020_08%20Thursday.docx) · [Week 5](Meeting_Minutes/Week%205_%2028_08%20Friday.docx) · [Week 6](Meeting_Minutes/Week%206_%2004_09%20Friday.docx) · [Week 7](Meeting_Minutes/Week%207%2012_9.docx) · [Week 8](Meeting_Minutes/Week%208.docx) · [Week 9 stand-up](Meeting_Minutes/Week%209%20Stand%20Up.docx) · [Week 10](Meeting_Minutes/Week%2010_%2011_10.docx) · [Week 11](Meeting_Minutes/Week%2011%2014_10.docx) · [Week 12](Meeting_Minutes/Week%2012.docx)
 - **[Wiki_Pages/](Wiki_Pages)**
   - [Ethical_Considerations.md](Wiki_Pages/Ethical_Considerations.md) — the Ethics for Designers canvas (Gispen, 2017)
-  - [Design_Overview.md](Wiki_Pages/Design_Overview.md) — currently empty; see the Design Process Overview above
+  - [Design Process Overview.pdf](Wiki_Pages/Design%20Process%20Overview.pdf) — the wiki page version of the Design Process Overview
 - **[Images/](Images)** — screenshots, probes, wireframes and photos used in this README
 - **[.claude/](.claude)** — local dev server helper ([nocache-server.py](.claude/nocache-server.py), [launch.json](.claude/launch.json))
 - **[README.md](README.md)** — this file
