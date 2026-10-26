@@ -42,8 +42,8 @@ The two modes, placed on a time–space matrix:
 
 |  | Synchronous | Asynchronous |
 |---|---|---|
-| **Co-located** | | **Message board** |
-| **Distributed** | **Live drawing** | |
+| **Co-located** | | **Message board** - leave a drawing for the next person |
+| **Distributed** | **L(INK) UP** - draw with someone at the other station, right now.  | |
 
 <p align="center"><img src="Images/matrix.jpeg" width="560" alt="Our Week 5 time-space matrix"><br><sub>Our Week 5 time-space matrix.</sub></p>
 
@@ -75,8 +75,6 @@ The minimum viable product (MVP) was built around three core features.
     <td><sub><b>Live drawing:</b> a shared canvas, drawing a scenario until the timer runs out.</sub></td>
   </tr>
 </table>
-
-<p align="center"><img src="Images/first_prototype_ss3.jpeg" width="260" alt="Saving the finished drawing on a phone"><br><sub>Saving the finished artwork (earlier prototype).</sub></p>
 
 Using the 3C model, the message board supports communication, as strangers exchange drawings and messages over time. The turn-taking timer supports coordination, structuring who draws when. The shared canvas supports cooperation, as both people build one drawing together. Seeing the other person’s strokes appear live also gives each user awareness that someone real is on the other side.
 
